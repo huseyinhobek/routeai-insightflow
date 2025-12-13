@@ -135,16 +135,274 @@ volumes:
 
 ## ☁️ AWS Docker Entegrasyonu
 
-Mevcut AWS Docker container'ınıza entegre etmek için:
+### AWS'deki Mevcut Docker Container'ına Entegrasyon
 
-1. `docker-compose.yml` dosyasını AWS'e kopyalayın
-2. Environment variables ayarlayın:
-   ```env
-   DATABASE_URL=postgresql://user:pass@your-rds-endpoint:5432/sav_insight
-   GEMINI_API_KEY=your_key
+AWS'de çalışan bir Docker container'ınız varsa ve bu projeyi entegre etmek istiyorsanız:
+
+#### 1. Veritabanı Bağlantısı (RDS veya Mevcut PostgreSQL)
+
+**Seçenek A: AWS RDS PostgreSQL**
+
+AWS RDS PostgreSQL veritabanınıza bağlanmak için:
+
+```env
+# backend/.env dosyası
+DATABASE_URL=postgresql://username:password@your-rds-endpoint.region.rds.amazonaws.com:5432/sav_insight
+```
+
+**Örnek:**
+```env
+DATABASE_URL=postgresql://admin:MySecurePassword123@sav-insight-db.abc123.us-east-1.rds.amazonaws.com:5432/sav_insight
+```
+
+**Seçenek B: Mevcut Docker Container'daki PostgreSQL**
+
+Eğer AWS'de zaten çalışan bir PostgreSQL container'ınız varsa:
+
+1. **Network Yapılandırması:**
+   ```yaml
+   # docker-compose.yml
+   services:
+     backend:
+       networks:
+         - your_existing_network
+     db:
+       image: postgres:15
+       networks:
+         - your_existing_network
+   networks:
+     your_existing_network:
+       external: true
    ```
-3. Port 8000'i expose edin
-4. Volume mount: `sav_uploads:/tmp/sav_uploads`
+
+2. **Veritabanı URL:**
+   ```env
+   # Container adı veya service adı kullanın
+   DATABASE_URL=postgresql://postgres:password@db_container_name:5432/sav_insight
+   ```
+
+**Seçenek C: EC2'de Çalışan PostgreSQL**
+
+EC2 instance'ınızda PostgreSQL çalışıyorsa:
+
+```env
+# Public IP veya Private IP kullanın
+DATABASE_URL=postgresql://postgres:password@ec2-xx-xx-xx-xx.compute-1.amazonaws.com:5432/sav_insight
+# veya
+DATABASE_URL=postgresql://postgres:password@10.0.1.5:5432/sav_insight
+```
+
+#### 2. Docker Compose ile AWS Entegrasyonu
+
+**Tam Yapılandırma Örneği:**
+
+```yaml
+version: '3.8'
+
+services:
+  backend:
+    build: ./backend
+    container_name: sav-insight-backend
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./backend:/app
+      - sav_uploads:/tmp/sav_uploads
+    environment:
+      - PYTHONUNBUFFERED=1
+      - DATABASE_URL=${DATABASE_URL}
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - UPLOAD_DIR=/tmp/sav_uploads
+      - DEBUG=false
+    networks:
+      - sav_network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+    container_name: sav-insight-frontend
+    ports:
+      - "3000:80"
+    depends_on:
+      - backend
+    networks:
+      - sav_network
+    restart: unless-stopped
+
+volumes:
+  sav_uploads:
+
+networks:
+  sav_network:
+    driver: bridge
+```
+
+#### 3. Environment Variables (.env)
+
+AWS'de çalıştırırken `backend/.env` dosyası:
+
+```env
+# AWS RDS veya Mevcut PostgreSQL Bağlantısı
+DATABASE_URL=postgresql://username:password@your-database-endpoint:5432/sav_insight
+
+# Gemini API Key (Opsiyonel)
+GEMINI_API_KEY=your_gemini_api_key_here
+
+# Upload Dizini (Container içinde)
+UPLOAD_DIR=/tmp/sav_uploads
+
+# Debug Modu (Production'da false)
+DEBUG=false
+
+# Max Upload Size (100MB)
+MAX_UPLOAD_SIZE=104857600
+```
+
+#### 4. AWS Security Group Yapılandırması
+
+PostgreSQL bağlantısı için Security Group kuralları:
+
+**Inbound Rules:**
+- Type: PostgreSQL
+- Port: 5432
+- Source: Backend container'ın bulunduğu Security Group veya VPC CIDR
+
+**Örnek:**
+```
+Type: PostgreSQL (TCP)
+Port: 5432
+Source: sg-xxxxxxxxx (Backend Security Group)
+```
+
+#### 5. Veritabanı Oluşturma
+
+AWS'deki PostgreSQL'de veritabanı oluşturun:
+
+```sql
+-- psql veya pgAdmin ile bağlanın
+CREATE DATABASE sav_insight;
+
+-- Kullanıcı oluşturma (opsiyonel)
+CREATE USER sav_user WITH PASSWORD 'secure_password';
+GRANT ALL PRIVILEGES ON DATABASE sav_insight TO sav_user;
+```
+
+#### 6. Container'ı Başlatma
+
+```bash
+# Environment variables ile
+docker-compose up -d
+
+# veya manuel olarak
+docker run -d \
+  --name sav-insight-backend \
+  -p 8000:8000 \
+  -e DATABASE_URL="postgresql://user:pass@rds-endpoint:5432/sav_insight" \
+  -e GEMINI_API_KEY="your_key" \
+  -v $(pwd)/uploads:/tmp/sav_uploads \
+  sav-insight-backend
+```
+
+#### 7. Bağlantı Testi
+
+```bash
+# Health check
+curl http://localhost:8000/health
+
+# Config check
+curl http://localhost:8000/api/config
+
+# Database connection test
+curl http://localhost:8000/api/datasets
+```
+
+#### 8. Troubleshooting AWS Bağlantı Sorunları
+
+**Problem: "Connection refused" veya "Timeout"**
+
+1. **Security Group Kontrolü:**
+   ```bash
+   # RDS Security Group'da backend'in IP'sine izin verildiğinden emin olun
+   ```
+
+2. **Network Connectivity:**
+   ```bash
+   # Container'dan RDS'e ping atın
+   docker exec sav-insight-backend ping your-rds-endpoint
+   ```
+
+3. **DNS Resolution:**
+   ```bash
+   # RDS endpoint'in resolve edildiğinden emin olun
+   docker exec sav-insight-backend nslookup your-rds-endpoint
+   ```
+
+4. **Connection Pool Ayarları:**
+   ```python
+   # database.py'de zaten optimize edilmiş:
+   # - pool_pre_ping=True (bağlantı kontrolü)
+   # - pool_recycle=3600 (1 saatte bir yenile)
+   # - keepalive ayarları
+   ```
+
+**Problem: "Authentication failed"**
+
+1. Kullanıcı adı ve şifrenin doğru olduğundan emin olun
+2. RDS'de kullanıcının gerekli yetkilere sahip olduğundan emin olun
+3. SSL bağlantısı gerekiyorsa:
+   ```env
+   DATABASE_URL=postgresql://user:pass@rds-endpoint:5432/sav_insight?sslmode=require
+   ```
+
+#### 9. Production Best Practices
+
+1. **Environment Variables:**
+   - AWS Secrets Manager veya Parameter Store kullanın
+   - `.env` dosyasını Git'e commit etmeyin
+
+2. **Database Connection:**
+   - Connection pooling aktif (zaten yapılandırılmış)
+   - Keepalive ayarları aktif
+   - Connection timeout ayarları
+
+3. **Security:**
+   - RDS'de SSL/TLS kullanın
+   - Security Group'ları sıkı tutun
+   - IAM authentication kullanabilirsiniz (RDS için)
+
+4. **Monitoring:**
+   - CloudWatch ile logları izleyin
+   - Health check endpoint'ini kullanın
+   - Database connection pool metriklerini izleyin
+
+#### 10. Örnek AWS Deployment Script
+
+```bash
+#!/bin/bash
+# deploy-aws.sh
+
+# Environment variables
+export DATABASE_URL="postgresql://admin:password@rds-endpoint:5432/sav_insight"
+export GEMINI_API_KEY="your_key"
+
+# Build and start
+docker-compose -f docker-compose.yml up -d --build
+
+# Wait for services
+sleep 10
+
+# Health check
+curl http://localhost:8000/health
+```
+
+Bu script'i AWS CodeDeploy veya EC2 User Data ile kullanabilirsiniz.
 
 ## 📡 API Endpoints
 
