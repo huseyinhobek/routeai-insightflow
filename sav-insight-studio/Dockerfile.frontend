@@ -2,11 +2,20 @@ FROM node:20-alpine AS builder
 
 WORKDIR /app
 
+# Build arguments
+ARG VITE_API_BASE_URL=/sav-api
+ARG VITE_BASE_PATH=/sav-insight/
+ARG GEMINI_API_KEY
+ENV VITE_API_BASE_URL=$VITE_API_BASE_URL
+ENV VITE_BASE_PATH=$VITE_BASE_PATH
+ENV GEMINI_API_KEY=$GEMINI_API_KEY
+
 # Copy package files
 COPY package.json package-lock.json* ./
 
 # Install dependencies
-RUN npm ci
+# Using npm install instead of npm ci to handle lock file updates
+RUN npm install
 
 # Copy source code
 COPY . .
