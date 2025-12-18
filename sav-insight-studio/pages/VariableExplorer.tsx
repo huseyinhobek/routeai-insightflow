@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { apiService } from '../services/apiService';
-import { DatasetMeta, VariableDetail } from '../types';
+import { DatasetMeta, VariableDetail, FrequencyItem } from '../types';
 import { CHART_COLORS } from '../constants';
-import { Search, BarChart2, List, Info } from 'lucide-react';
+import { Search, BarChart2, List, Info, X, ArrowUpDown } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 
 const VariableExplorer: React.FC = () => {
@@ -11,6 +11,9 @@ const VariableExplorer: React.FC = () => {
   const [varDetail, setVarDetail] = useState<VariableDetail | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [loadingDetail, setLoadingDetail] = useState(false);
+  const [showFullModal, setShowFullModal] = useState(false);
+  const [modalSearchTerm, setModalSearchTerm] = useState('');
+  const [sortDirection, setSortDirection] = useState<'desc' | 'asc'>('desc');
 
   useEffect(() => {
     const stored = localStorage.getItem('currentDatasetMeta');
@@ -57,6 +60,77 @@ const VariableExplorer: React.FC = () => {
       v.label.toLowerCase().includes(searchTerm.toLowerCase())
     );
   }, [meta, searchTerm]);
+
+  // Prepare chart data: Top 10 + Other + Missing
+  const chartData = useMemo(() => {
+    if (!varDetail || !varDetail.frequencies) return [];
+    
+    const freqs = [...varDetail.frequencies];
+    const missingRow = freqs.find(f => f.value === null);
+    const validFreqs = freqs.filter(f => f.value !== null);
+    
+    if (!varDetail.hasManyCategories) {
+      // Show all categories
+      return freqs;
+    }
+    
+    // High cardinality: show top 10 + Other + Missing
+    const top10 = validFreqs.slice(0, 10);
+    const rest = validFreqs.slice(10);
+    
+    const result = [...top10];
+    
+    if (rest.length > 0) {
+      const otherCount = rest.reduce((sum, f) => sum + f.count, 0);
+      const otherPercentOfTotal = rest.reduce((sum, f) => sum + f.percentOfTotal, 0);
+      const otherPercentOfValid = rest.reduce((sum, f) => sum + f.percentOfValid, 0);
+      
+      result.push({
+        value: 'OTHER',
+        label: `Other (${rest.length} categories)`,
+        count: otherCount,
+        percentOfTotal: otherPercentOfTotal,
+        percentOfValid: otherPercentOfValid
+      });
+    }
+    
+    if (missingRow) {
+      result.push(missingRow);
+    }
+    
+    return result;
+  }, [varDetail]);
+
+  // Modal filtered and sorted frequencies
+  const modalFrequencies = useMemo(() => {
+    if (!varDetail || !varDetail.frequencies) return [];
+    
+    let filtered = varDetail.frequencies.filter(f => 
+      f.label.toLowerCase().includes(modalSearchTerm.toLowerCase()) ||
+      (f.value !== null && String(f.value).toLowerCase().includes(modalSearchTerm.toLowerCase()))
+    );
+    
+    // Sort by count
+    filtered.sort((a, b) => {
+      if (sortDirection === 'desc') {
+        return b.count - a.count;
+      } else {
+        return a.count - b.count;
+      }
+    });
+    
+    return filtered;
+  }, [varDetail, modalSearchTerm, sortDirection]);
+
+  const handleBarClick = (data: any) => {
+    setShowFullModal(true);
+    // If clicked on a specific category, pre-filter to it
+    if (data && data.value !== 'OTHER' && data.value !== null) {
+      setModalSearchTerm(String(data.value));
+    } else {
+      setModalSearchTerm('');
+    }
+  };
 
   if (!meta) return <div>Loading...</div>;
 
@@ -106,40 +180,117 @@ const VariableExplorer: React.FC = () => {
                 <Info size={16} />
                 <span>Variable Details</span>
               </div>
-              <h2 className="text-2xl font-bold text-gray-900 mb-2">{varDetail.code}: {varDetail.label}</h2>
-              <div className="flex space-x-6 text-sm text-gray-600">
-                <span>Valid N: <strong>{varDetail.responseCount}</strong></span>
-                <span>Missing: <strong>{varDetail.missingValues?.userMissingValues.length || 0} defs</strong></span>
-                <span>Cardinality: <strong>{varDetail.cardinality}</strong></span>
+              <h2 className="text-2xl font-bold text-gray-900 mb-3">{varDetail.code}: {varDetail.label}</h2>
+              
+              {/* Stats Header */}
+              <div className="grid grid-cols-4 gap-4 mt-4">
+                <div className="bg-white p-3 rounded-lg border border-gray-200">
+                  <div className="text-xs text-gray-500 mb-1">Total N</div>
+                  <div className="text-xl font-bold text-gray-900">{varDetail.totalN}</div>
+                </div>
+                <div className="bg-white p-3 rounded-lg border border-gray-200">
+                  <div className="text-xs text-gray-500 mb-1">Valid N</div>
+                  <div className="text-xl font-bold text-green-600">{varDetail.validN}</div>
+                  <div className="text-xs text-gray-400">{((varDetail.validN / varDetail.totalN) * 100).toFixed(1)}%</div>
+                </div>
+                <div className="bg-white p-3 rounded-lg border border-gray-200">
+                  <div className="text-xs text-gray-500 mb-1">Missing N</div>
+                  <div className="text-xl font-bold text-red-600">{varDetail.missingN}</div>
+                  <div className="text-xs text-gray-400">{varDetail.missingPercentOfTotal.toFixed(1)}%</div>
+                </div>
+                <div className="bg-white p-3 rounded-lg border border-gray-200">
+                  <div className="text-xs text-gray-500 mb-1">Cardinality</div>
+                  <div className="text-xl font-bold text-gray-900">{varDetail.categoryCount}</div>
+                </div>
               </div>
             </div>
 
             <div className="flex-1 p-6 overflow-y-auto">
               {/* Chart */}
-              {varDetail.frequencies && varDetail.frequencies.length > 0 && (
-                <div className="mb-8 h-80 w-full min-w-0">
-                   <h3 className="text-lg font-semibold mb-4 flex items-center"><BarChart2 className="mr-2" size={20}/> Frequency Distribution</h3>
-                   <ResponsiveContainer width="100%" height="100%" minHeight={320}>
-                     <BarChart data={varDetail.frequencies} layout="vertical" margin={{ left: 40, right: 40 }}>
-                       <CartesianGrid strokeDasharray="3 3" horizontal={true} vertical={false} />
-                       <XAxis type="number" />
-                       <YAxis type="category" dataKey="label" width={150} tick={{fontSize: 11}} interval={0} />
-                       <Tooltip 
-                          contentStyle={{borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'}}
-                       />
-                       <Bar dataKey="count" radius={[0, 4, 4, 0]}>
-                         {varDetail.frequencies.map((entry, index) => (
-                           <Cell key={`cell-${index}`} fill={CHART_COLORS[index % CHART_COLORS.length]} />
-                         ))}
-                       </Bar>
-                     </BarChart>
-                   </ResponsiveContainer>
+              {chartData && chartData.length > 0 && (
+                <div className="mb-8">
+                   <div className="flex justify-between items-center mb-4">
+                     <h3 className="text-lg font-semibold flex items-center">
+                       <BarChart2 className="mr-2" size={20}/> 
+                       Frequency Distribution
+                       {varDetail.hasManyCategories && (
+                         <span className="ml-2 text-xs text-gray-500 font-normal">(Top 10 shown)</span>
+                       )}
+                     </h3>
+                     {varDetail.hasManyCategories && (
+                       <button
+                         onClick={() => setShowFullModal(true)}
+                         className="text-sm text-blue-600 hover:text-blue-700 font-medium"
+                       >
+                         View all {varDetail.categoryCount} categories →
+                       </button>
+                     )}
+                   </div>
+                   <div className="h-80 w-full min-w-0">
+                     <ResponsiveContainer width="100%" height="100%" minHeight={320}>
+                       <BarChart data={chartData} layout="vertical" margin={{ left: 40, right: 40 }}>
+                         <CartesianGrid strokeDasharray="3 3" horizontal={true} vertical={false} />
+                         <XAxis type="number" />
+                         <YAxis 
+                           type="category" 
+                           dataKey="label" 
+                           width={150} 
+                           tick={{fontSize: 11}} 
+                           interval={0}
+                           tickFormatter={(value) => {
+                             // Truncate long labels
+                             return value.length > 20 ? value.substring(0, 18) + '...' : value;
+                           }}
+                         />
+                         <Tooltip 
+                            contentStyle={{borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'}}
+                            formatter={(value: any, name: string, props: any) => {
+                              const item = props.payload;
+                              return [
+                                `Count: ${item.count} (${item.percentOfTotal.toFixed(1)}% of total, ${item.percentOfValid.toFixed(1)}% of valid)`,
+                                item.label
+                              ];
+                            }}
+                         />
+                         <Bar 
+                           dataKey="count" 
+                           radius={[0, 4, 4, 0]}
+                           onClick={handleBarClick}
+                           cursor="pointer"
+                         >
+                           {chartData.map((entry, index) => {
+                             // Special color for Missing
+                             let fillColor = CHART_COLORS[index % CHART_COLORS.length];
+                             if (entry.value === null) {
+                               fillColor = '#ef4444'; // red for missing
+                             } else if (entry.value === 'OTHER') {
+                               fillColor = '#9ca3af'; // gray for other
+                             }
+                             return <Cell key={`cell-${index}`} fill={fillColor} />;
+                           })}
+                         </Bar>
+                       </BarChart>
+                     </ResponsiveContainer>
+                   </div>
                 </div>
               )}
 
-              {/* Table */}
+              {/* Table Preview */}
               <div>
-                <h3 className="text-lg font-semibold mb-4 flex items-center"><List className="mr-2" size={20}/> Data Dictionary</h3>
+                <div className="flex justify-between items-center mb-4">
+                  <h3 className="text-lg font-semibold flex items-center">
+                    <List className="mr-2" size={20}/> 
+                    Frequency Table
+                  </h3>
+                  {varDetail.hasManyCategories && (
+                    <button
+                      onClick={() => setShowFullModal(true)}
+                      className="text-sm text-blue-600 hover:text-blue-700 font-medium"
+                    >
+                      View full table →
+                    </button>
+                  )}
+                </div>
                 <div className="border rounded-lg overflow-hidden">
                   <table className="w-full text-sm text-left">
                     <thead className="bg-gray-50 text-gray-600 font-medium border-b">
@@ -147,16 +298,20 @@ const VariableExplorer: React.FC = () => {
                         <th className="px-4 py-3">Value</th>
                         <th className="px-4 py-3">Label</th>
                         <th className="px-4 py-3 text-right">Count</th>
-                        <th className="px-4 py-3 text-right">Percent</th>
+                        <th className="px-4 py-3 text-right">% of Total</th>
+                        <th className="px-4 py-3 text-right">% of Valid</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100">
-                      {varDetail.frequencies?.map((freq, i) => (
-                        <tr key={i} className="hover:bg-gray-50">
-                          <td className="px-4 py-2 font-mono text-gray-500">{freq.value}</td>
+                      {chartData.slice(0, 10).map((freq, i) => (
+                        <tr key={i} className={`hover:bg-gray-50 ${freq.value === null ? 'bg-red-50' : ''}`}>
+                          <td className="px-4 py-2 font-mono text-gray-500">
+                            {freq.value === null ? '—' : freq.value}
+                          </td>
                           <td className="px-4 py-2 text-gray-900">{freq.label}</td>
-                          <td className="px-4 py-2 text-right">{freq.count}</td>
-                          <td className="px-4 py-2 text-right text-gray-500">{freq.percent.toFixed(1)}%</td>
+                          <td className="px-4 py-2 text-right font-medium">{freq.count}</td>
+                          <td className="px-4 py-2 text-right text-gray-500">{freq.percentOfTotal.toFixed(1)}%</td>
+                          <td className="px-4 py-2 text-right text-gray-500">{freq.percentOfValid.toFixed(1)}%</td>
                         </tr>
                       ))}
                     </tbody>
@@ -167,6 +322,105 @@ const VariableExplorer: React.FC = () => {
           </div>
         )}
       </div>
+
+      {/* Full Frequency Modal */}
+      {showFullModal && varDetail && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col">
+            {/* Modal Header */}
+            <div className="p-6 border-b border-gray-200 flex justify-between items-start">
+              <div>
+                <h2 className="text-2xl font-bold text-gray-900 mb-1">
+                  All Frequencies: {varDetail.code}
+                </h2>
+                <p className="text-sm text-gray-500">{varDetail.label}</p>
+                <p className="text-xs text-gray-400 mt-1">
+                  {varDetail.categoryCount} categories, {varDetail.totalN} total responses
+                </p>
+              </div>
+              <button
+                onClick={() => {
+                  setShowFullModal(false);
+                  setModalSearchTerm('');
+                }}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <X size={24} />
+              </button>
+            </div>
+
+            {/* Search and Sort Controls */}
+            <div className="p-4 border-b border-gray-200 flex gap-3">
+              <div className="flex-1 relative">
+                <Search className="absolute left-3 top-2.5 text-gray-400" size={18} />
+                <input 
+                  type="text"
+                  placeholder="Search by value or label..."
+                  className="w-full pl-10 pr-4 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                  value={modalSearchTerm}
+                  onChange={(e) => setModalSearchTerm(e.target.value)}
+                />
+              </div>
+              <button
+                onClick={() => setSortDirection(sortDirection === 'desc' ? 'asc' : 'desc')}
+                className="flex items-center gap-2 px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg text-sm font-medium text-gray-700"
+              >
+                <ArrowUpDown size={16} />
+                Sort: {sortDirection === 'desc' ? 'High → Low' : 'Low → High'}
+              </button>
+            </div>
+
+            {/* Modal Table */}
+            <div className="flex-1 overflow-y-auto p-6">
+              <table className="w-full text-sm text-left">
+                <thead className="bg-gray-50 text-gray-600 font-medium border-b sticky top-0">
+                  <tr>
+                    <th className="px-4 py-3">Value</th>
+                    <th className="px-4 py-3">Label</th>
+                    <th className="px-4 py-3 text-right">Count</th>
+                    <th className="px-4 py-3 text-right">% of Total</th>
+                    <th className="px-4 py-3 text-right">% of Valid</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {modalFrequencies.map((freq, i) => (
+                    <tr key={i} className={`hover:bg-gray-50 ${freq.value === null ? 'bg-red-50' : ''}`}>
+                      <td className="px-4 py-2 font-mono text-gray-500">
+                        {freq.value === null ? '—' : freq.value}
+                      </td>
+                      <td className="px-4 py-2 text-gray-900">{freq.label}</td>
+                      <td className="px-4 py-2 text-right font-medium">{freq.count}</td>
+                      <td className="px-4 py-2 text-right text-gray-500">{freq.percentOfTotal.toFixed(1)}%</td>
+                      <td className="px-4 py-2 text-right text-gray-500">{freq.percentOfValid.toFixed(1)}%</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              {modalFrequencies.length === 0 && (
+                <div className="text-center py-12 text-gray-400">
+                  No results found
+                </div>
+              )}
+            </div>
+
+            {/* Modal Footer */}
+            <div className="p-4 border-t border-gray-200 flex justify-between items-center bg-gray-50">
+              <div className="text-sm text-gray-600">
+                Showing {modalFrequencies.length} of {varDetail.frequencies.length} rows
+              </div>
+              <button
+                onClick={() => {
+                  setShowFullModal(false);
+                  setModalSearchTerm('');
+                }}
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
