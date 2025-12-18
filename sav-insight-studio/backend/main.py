@@ -244,6 +244,155 @@ def get_dataframe(dataset_id: str, db: Session = None) -> tuple:
     return None, None
 
 
+def is_value_missing(val) -> bool:
+    """Check if a single value is considered missing (implicit)"""
+    if pd.isna(val):
+        return True
+    if isinstance(val, str):
+        if val.strip() == '':
+            return True
+    return False
+
+
+def get_explicit_missing_codes(var_info: dict, meta) -> set:
+    """
+    Extract explicit missing codes from SPSS metadata.
+    Returns a set of values that should be treated as missing.
+    """
+    missing_codes = set()
+    
+    # Check missingValues from var_info
+    if var_info and var_info.get("missingValues"):
+        missing_vals = var_info["missingValues"]
+        if isinstance(missing_vals, dict) and missing_vals.get("userMissingValues"):
+            for val in missing_vals["userMissingValues"]:
+                missing_codes.add(val)
+    
+    # Check SPSS meta missing_ranges
+    var_name = var_info.get("code")
+    if meta and hasattr(meta, 'missing_ranges') and var_name in meta.missing_ranges:
+        ranges = meta.missing_ranges[var_name]
+        # ranges is typically a dict with 'values' or ranges
+        if isinstance(ranges, dict):
+            if 'values' in ranges:
+                for val in ranges['values']:
+                    missing_codes.add(val)
+    
+    # Check value labels for common non-substantive answers
+    non_substantive_keywords = [
+        "don't know", "dont know", "prefer not to say", "refused", 
+        "not applicable", "n/a", "no answer", "missing", "skip"
+    ]
+    
+    if var_info and var_info.get("valueLabels"):
+        for vl in var_info["valueLabels"]:
+            label = vl.get("label", "").lower()
+            for keyword in non_substantive_keywords:
+                if keyword in label:
+                    missing_codes.add(vl.get("value"))
+                    break
+    
+    return missing_codes
+
+
+def compute_variable_stats(df: pd.DataFrame, var_name: str, var_info: dict, meta) -> dict:
+    """
+    Compute comprehensive variable statistics with correct missing handling.
+    
+    Returns:
+        {
+            "totalN": int,
+            "validN": int,
+            "missingN": int,
+            "missingPercentOfTotal": float,
+            "frequencies": [
+                {
+                    "value": val,
+                    "label": str,
+                    "count": int,
+                    "percentOfTotal": float,
+                    "percentOfValid": float
+                },
+                ...
+            ],
+            "hasManyCategories": bool,
+            "categoryCount": int
+        }
+    """
+    series = df[var_name]
+    total_n = len(df)
+    
+    # Get explicit missing codes
+    explicit_missing = get_explicit_missing_codes(var_info, meta)
+    
+    # Identify missing values
+    missing_mask = series.apply(is_value_missing)
+    
+    # Also mark explicit missing codes as missing
+    if len(explicit_missing) > 0:
+        explicit_mask = series.isin(explicit_missing)
+        missing_mask = missing_mask | explicit_mask
+    
+    missing_n = int(missing_mask.sum())
+    valid_n = total_n - missing_n
+    missing_percent_of_total = round((missing_n / total_n * 100) if total_n > 0 else 0, 2)
+    
+    # Calculate frequencies for valid values only
+    valid_series = series[~missing_mask]
+    value_counts = valid_series.value_counts()
+    
+    frequencies = []
+    for val, count in value_counts.items():
+        label = str(val)
+        
+        # Try to find label from valueLabels
+        if var_info.get("valueLabels"):
+            label_match = next(
+                (vl.get("label", str(vl.get("value"))) 
+                 for vl in var_info.get("valueLabels", []) 
+                 if vl.get("value") == val),
+                str(val)
+            )
+            label = label_match
+        
+        percent_of_total = round((count / total_n * 100) if total_n > 0 else 0, 2)
+        percent_of_valid = round((count / valid_n * 100) if valid_n > 0 else 0, 2)
+        
+        frequencies.append({
+            "value": val if not pd.isna(val) else None,
+            "label": label,
+            "count": int(count),
+            "percentOfTotal": percent_of_total,
+            "percentOfValid": percent_of_valid
+        })
+    
+    # Sort by count descending
+    frequencies.sort(key=lambda x: x["count"], reverse=True)
+    
+    # Add missing row if there are any missing values
+    if missing_n > 0:
+        frequencies.append({
+            "value": None,
+            "label": "Missing / No answer",
+            "count": missing_n,
+            "percentOfTotal": missing_percent_of_total,
+            "percentOfValid": 0.0  # Missing is not part of valid
+        })
+    
+    category_count = len(value_counts)
+    has_many_categories = category_count > 12
+    
+    return {
+        "totalN": total_n,
+        "validN": valid_n,
+        "missingN": missing_n,
+        "missingPercentOfTotal": missing_percent_of_total,
+        "frequencies": frequencies,
+        "hasManyCategories": has_many_categories,
+        "categoryCount": category_count
+    }
+
+
 # ==================== API ENDPOINTS ====================
 
 @app.post("/api/datasets/upload")
@@ -381,7 +530,7 @@ async def get_quality_report(dataset_id: str, db: Session = Depends(get_db)):
 
 @app.get("/api/datasets/{dataset_id}/variables/{var_name}")
 async def get_variable_detail(dataset_id: str, var_name: str, db: Session = Depends(get_db)):
-    """Get detailed information about a specific variable"""
+    """Get detailed information about a specific variable with correct missing handling"""
     try:
         df, meta = get_dataframe(dataset_id, db)
         
@@ -421,36 +570,26 @@ async def get_variable_detail(dataset_id: str, var_name: str, db: Session = Depe
             }
         
         series = df[var_name]
-        
-        # Calculate frequencies
-        frequencies = []
         var_type = var_info.get("type", "unknown")
-        if var_type in ["single_choice", "multi_choice", "scale"]:
-            value_counts = series.value_counts()
-            total = len(series.dropna())
-            
-            for val, count in value_counts.items():
-                label = str(val)
-                # Try to find label from valueLabels
-                if var_info.get("valueLabels"):
-                    label_match = next(
-                        (vl.get("label", str(vl.get("value"))) for vl in var_info.get("valueLabels", []) 
-                         if vl.get("value") == val),
-                        str(val)
-                    )
-                    label = label_match
-                
-                frequencies.append({
-                    "value": val if not pd.isna(val) else None,
-                    "label": label,
-                    "count": int(count),
-                    "percent": round((count / total * 100) if total > 0 else 0, 2)
-                })
         
-        # Calculate statistics
+        # Compute comprehensive statistics with correct missing handling
+        var_stats = compute_variable_stats(df, var_name, var_info, meta)
+        
+        # Calculate numeric statistics if applicable
         stats = None
         if var_type in ["numeric", "scale"]:
-            numeric_series = pd.to_numeric(series, errors='coerce').dropna()
+            # Get explicit missing codes
+            explicit_missing = get_explicit_missing_codes(var_info, meta)
+            
+            # Filter out missing values
+            missing_mask = series.apply(is_value_missing)
+            if len(explicit_missing) > 0:
+                explicit_mask = series.isin(explicit_missing)
+                missing_mask = missing_mask | explicit_mask
+            
+            valid_series = series[~missing_mask]
+            numeric_series = pd.to_numeric(valid_series, errors='coerce').dropna()
+            
             if len(numeric_series) > 0:
                 stats = {
                     "min": float(numeric_series.min()),
@@ -462,7 +601,13 @@ async def get_variable_detail(dataset_id: str, var_name: str, db: Session = Depe
         
         return {
             **var_info,
-            "frequencies": frequencies,
+            "totalN": var_stats["totalN"],
+            "validN": var_stats["validN"],
+            "missingN": var_stats["missingN"],
+            "missingPercentOfTotal": var_stats["missingPercentOfTotal"],
+            "frequencies": var_stats["frequencies"],
+            "hasManyCategories": var_stats["hasManyCategories"],
+            "categoryCount": var_stats["categoryCount"],
             "stats": stats
         }
     except HTTPException:

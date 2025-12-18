@@ -103,14 +103,22 @@ export interface QualityReport {
 }
 
 export interface FrequencyItem {
-  value: string | number;
+  value: string | number | null;
   label: string;
   count: number;
-  percent: number;
+  percent?: number; // Legacy field, kept for backwards compatibility
+  percentOfTotal: number;
+  percentOfValid: number;
 }
 
 export interface VariableDetail extends VariableSummary {
+  totalN: number;
+  validN: number;
+  missingN: number;
+  missingPercentOfTotal: number;
   frequencies: FrequencyItem[]; // For categorical
+  hasManyCategories: boolean;
+  categoryCount: number;
   stats?: { // For numeric
     min: number;
     max: number;
