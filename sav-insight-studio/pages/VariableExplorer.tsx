@@ -26,7 +26,7 @@ const VariableExplorer: React.FC = () => {
         }
       } catch (err) {
         console.error('Failed to parse dataset meta:', err);
-        alert('Dataset bilgisi okunamadı. Lütfen dosyayı tekrar yükleyin.');
+        alert('Could not read dataset info. Please reload the file.');
         window.location.href = '/#/';
       }
     } else {
@@ -45,7 +45,7 @@ const VariableExplorer: React.FC = () => {
       console.error('Variable detail error:', err);
       // If dataset not found, redirect to upload page
       if (err.message?.includes('not found') || err.message?.includes('404')) {
-        alert('Dataset bulunamadı. Lütfen dosyayı tekrar yükleyin.');
+        alert('Dataset not found. Please reload the file.');
         window.location.href = '/#/';
       }
     } finally {
@@ -81,9 +81,9 @@ const VariableExplorer: React.FC = () => {
     const result = [...top10];
     
     if (rest.length > 0) {
-      const otherCount = rest.reduce((sum, f) => sum + f.count, 0);
-      const otherPercentOfTotal = rest.reduce((sum, f) => sum + f.percentOfTotal, 0);
-      const otherPercentOfValid = rest.reduce((sum, f) => sum + f.percentOfValid, 0);
+      const otherCount = rest.reduce((sum, f) => sum + (f.count || 0), 0);
+      const otherPercentOfTotal = rest.reduce((sum, f) => sum + (f.percentOfTotal || 0), 0);
+      const otherPercentOfValid = rest.reduce((sum, f) => sum + (f.percentOfValid || 0), 0);
       
       result.push({
         value: 'OTHER',
@@ -122,14 +122,9 @@ const VariableExplorer: React.FC = () => {
     return filtered;
   }, [varDetail, modalSearchTerm, sortDirection]);
 
-  const handleBarClick = (data: any) => {
+  const handleBarClick = () => {
     setShowFullModal(true);
-    // If clicked on a specific category, pre-filter to it
-    if (data && data.value !== 'OTHER' && data.value !== null) {
-      setModalSearchTerm(String(data.value));
-    } else {
-      setModalSearchTerm('');
-    }
+    setModalSearchTerm('');
   };
 
   if (!meta) return <div>Loading...</div>;
@@ -196,7 +191,7 @@ const VariableExplorer: React.FC = () => {
                 <div className="bg-white p-3 rounded-lg border border-gray-200">
                   <div className="text-xs text-gray-500 mb-1">Missing N</div>
                   <div className="text-xl font-bold text-red-600">{varDetail.missingN}</div>
-                  <div className="text-xs text-gray-400">{varDetail.missingPercentOfTotal.toFixed(1)}%</div>
+                  <div className="text-xs text-gray-400">{(varDetail.missingPercentOfTotal ?? 0).toFixed(1)}%</div>
                 </div>
                 <div className="bg-white p-3 rounded-lg border border-gray-200">
                   <div className="text-xs text-gray-500 mb-1">Cardinality</div>
@@ -242,12 +237,14 @@ const VariableExplorer: React.FC = () => {
                              return value.length > 20 ? value.substring(0, 18) + '...' : value;
                            }}
                          />
-                         <Tooltip 
-                            contentStyle={{borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'}}
-                            formatter={(value: any, name: string, props: any) => {
+                        <Tooltip 
+                           contentStyle={{borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'}}
+                           formatter={(value: any, name: string, props: any) => {
                               const item = props.payload;
+                              const percentOfTotal = (item.percentOfTotal ?? 0).toFixed(1);
+                              const percentOfValid = (item.percentOfValid ?? 0).toFixed(1);
                               return [
-                                `Count: ${item.count} (${item.percentOfTotal.toFixed(1)}% of total, ${item.percentOfValid.toFixed(1)}% of valid)`,
+                                `Count: ${item.count} (${percentOfTotal}% of total, ${percentOfValid}% of valid)`,
                                 item.label
                               ];
                             }}
@@ -310,8 +307,8 @@ const VariableExplorer: React.FC = () => {
                           </td>
                           <td className="px-4 py-2 text-gray-900">{freq.label}</td>
                           <td className="px-4 py-2 text-right font-medium">{freq.count}</td>
-                          <td className="px-4 py-2 text-right text-gray-500">{freq.percentOfTotal.toFixed(1)}%</td>
-                          <td className="px-4 py-2 text-right text-gray-500">{freq.percentOfValid.toFixed(1)}%</td>
+                          <td className="px-4 py-2 text-right text-gray-500">{(freq.percentOfTotal ?? 0).toFixed(1)}%</td>
+                          <td className="px-4 py-2 text-right text-gray-500">{(freq.percentOfValid ?? 0).toFixed(1)}%</td>
                         </tr>
                       ))}
                     </tbody>
@@ -390,11 +387,25 @@ const VariableExplorer: React.FC = () => {
                       </td>
                       <td className="px-4 py-2 text-gray-900">{freq.label}</td>
                       <td className="px-4 py-2 text-right font-medium">{freq.count}</td>
-                      <td className="px-4 py-2 text-right text-gray-500">{freq.percentOfTotal.toFixed(1)}%</td>
-                      <td className="px-4 py-2 text-right text-gray-500">{freq.percentOfValid.toFixed(1)}%</td>
+                      <td className="px-4 py-2 text-right text-gray-500">{(freq.percentOfTotal ?? 0).toFixed(1)}%</td>
+                      <td className="px-4 py-2 text-right text-gray-500">{(freq.percentOfValid ?? 0).toFixed(1)}%</td>
                     </tr>
                   ))}
                 </tbody>
+                <tfoot className="bg-gray-100 font-semibold border-t-2 border-gray-300">
+                  <tr>
+                    <td className="px-4 py-3 text-gray-700" colSpan={2}>Total</td>
+                    <td className="px-4 py-3 text-right text-gray-900">
+                      {modalFrequencies.reduce((sum, f) => sum + (f.count || 0), 0)}
+                    </td>
+                    <td className="px-4 py-3 text-right text-gray-700">
+                      {modalFrequencies.reduce((sum, f) => sum + (f.percentOfTotal ?? 0), 0).toFixed(1)}%
+                    </td>
+                    <td className="px-4 py-3 text-right text-gray-700">
+                      {modalFrequencies.reduce((sum, f) => sum + (f.percentOfValid ?? 0), 0).toFixed(1)}%
+                    </td>
+                  </tr>
+                </tfoot>
               </table>
               {modalFrequencies.length === 0 && (
                 <div className="text-center py-12 text-gray-400">

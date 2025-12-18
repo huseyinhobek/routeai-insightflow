@@ -30,7 +30,7 @@ const UploadPage: React.FC = () => {
 
   const handleFile = async (file: File) => {
     if (!file.name.toLowerCase().endsWith('.sav')) {
-      setError('Lütfen geçerli bir SPSS (.sav) dosyası yükleyin.');
+      setError('Please upload a valid SPSS (.sav) file.');
       return;
     }
 
@@ -44,7 +44,7 @@ const UploadPage: React.FC = () => {
       navigate('/overview');
     } catch (err: any) {
       console.error(err);
-      setError(err.message || 'Yükleme başarısız. Backend çalışıyor mu?');
+      setError(err.message || 'Upload failed. Is the backend running?');
     } finally {
       setIsLoading(false);
     }
@@ -58,7 +58,7 @@ const UploadPage: React.FC = () => {
       navigate('/overview');
     } catch (err) {
       console.error('Failed to load dataset:', err);
-      setError('Dataset yüklenemedi. Dosya silinmiş olabilir.');
+      setError('Could not load dataset. The file may have been deleted.');
     }
   };
 
@@ -80,11 +80,11 @@ const UploadPage: React.FC = () => {
   const getStatusBadge = (status: string | null) => {
     switch (status) {
       case 'green':
-        return <span className="text-xs px-2 py-0.5 rounded-full bg-green-100 text-green-700">Uygun</span>;
+        return <span className="text-xs px-2 py-0.5 rounded-full bg-green-100 text-green-700">Ready</span>;
       case 'yellow':
-        return <span className="text-xs px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">Dikkat</span>;
+        return <span className="text-xs px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">Caution</span>;
       case 'red':
-        return <span className="text-xs px-2 py-0.5 rounded-full bg-red-100 text-red-700">Uygun Değil</span>;
+        return <span className="text-xs px-2 py-0.5 rounded-full bg-red-100 text-red-700">Not Ready</span>;
       default:
         return null;
     }
@@ -102,7 +102,7 @@ const UploadPage: React.FC = () => {
             SAV Insight Studio
           </h1>
           <p className="text-lg text-gray-500 max-w-xl mx-auto">
-            SPSS veri setlerinizi analiz edin, veri kalitesini ölçün ve dijital ikiz uygunluğunu değerlendirin.
+            Analyze your SPSS datasets, measure data quality, and evaluate digital twin readiness.
           </p>
         </div>
 
@@ -139,17 +139,17 @@ const UploadPage: React.FC = () => {
           </div>
 
           <h3 className="text-xl font-semibold text-gray-900 mb-2">
-            {isLoading ? 'Dosya Analiz Ediliyor...' : 'Tıklayın veya .sav dosyası sürükleyin'}
+            {isLoading ? 'Analyzing File...' : 'Click or drag a .sav file here'}
           </h3>
           <p className="text-sm text-gray-500 max-w-sm mx-auto">
-            Desteklenen format: SPSS Statistics Data Document (.sav). 
-            Önerilen maksimum boyut: 100MB.
+            Supported format: SPSS Statistics Data Document (.sav). 
+            Recommended maximum size: 100MB.
           </p>
 
           {!isLoading && (
             <div className="mt-8 flex items-center space-x-2 text-sm text-gray-400">
               <FileType size={16} />
-              <span>Güvenli yerel işleme - verileriniz sunucuya yüklenir</span>
+              <span>Secure processing - your data is uploaded to the server</span>
             </div>
           )}
         </div>
@@ -159,7 +159,7 @@ const UploadPage: React.FC = () => {
           <div className="mt-6 p-4 bg-red-50 border border-red-200 rounded-xl flex items-start space-x-3">
             <AlertCircle className="w-5 h-5 text-red-600 mt-0.5" />
             <div>
-              <h4 className="font-semibold text-red-900">Yükleme Başarısız</h4>
+              <h4 className="font-semibold text-red-900">Upload Failed</h4>
               <p className="text-sm text-red-700 mt-1">{error}</p>
             </div>
           </div>
@@ -171,13 +171,13 @@ const UploadPage: React.FC = () => {
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-lg font-bold text-gray-900 flex items-center">
                 <Clock className="mr-2 text-gray-400" size={20} />
-                Son Analizler
+                Recent Analyses
               </h2>
               <button
                 onClick={() => navigate('/history')}
                 className="text-sm text-blue-600 hover:text-blue-700 font-medium flex items-center"
               >
-                Tümünü Gör
+                View All
                 <ChevronRight size={16} />
               </button>
             </div>
@@ -196,7 +196,7 @@ const UploadPage: React.FC = () => {
                     <div>
                       <h3 className="font-medium text-gray-900">{dataset.filename}</h3>
                       <p className="text-xs text-gray-500">
-                        {dataset.nRows?.toLocaleString()} katılımcı • {dataset.nCols} değişken
+                        {dataset.nRows?.toLocaleString()} respondents • {dataset.nCols} variables
                       </p>
                     </div>
                   </div>
@@ -216,27 +216,27 @@ const UploadPage: React.FC = () => {
             <div className="inline-flex items-center justify-center w-12 h-12 bg-green-100 rounded-xl mb-4">
               <span className="text-2xl">📊</span>
             </div>
-            <h3 className="font-bold text-gray-900 mb-2">Veri Kalitesi Analizi</h3>
+            <h3 className="font-bold text-gray-900 mb-2">Data Quality Analysis</h3>
             <p className="text-sm text-gray-500">
-              Eksik veriler, tutarlılık ve geçerlilik kontrolü ile kapsamlı kalite raporu
+              Comprehensive quality report with missing data, consistency, and validity checks
             </p>
           </div>
           <div className="text-center p-6">
             <div className="inline-flex items-center justify-center w-12 h-12 bg-blue-100 rounded-xl mb-4">
               <span className="text-2xl">🤖</span>
             </div>
-            <h3 className="font-bold text-gray-900 mb-2">Dijital İkiz Değerlendirmesi</h3>
+            <h3 className="font-bold text-gray-900 mb-2">Digital Twin Assessment</h3>
             <p className="text-sm text-gray-500">
-              Verilerinizin dijital ikiz oluşturmak için uygunluğunu otomatik değerlendirme
+              Automatic evaluation of your data's suitability for digital twin creation
             </p>
           </div>
           <div className="text-center p-6">
             <div className="inline-flex items-center justify-center w-12 h-12 bg-purple-100 rounded-xl mb-4">
               <span className="text-2xl">✨</span>
             </div>
-            <h3 className="font-bold text-gray-900 mb-2">AI Destekli Filtreler</h3>
+            <h3 className="font-bold text-gray-900 mb-2">AI-Powered Filters</h3>
             <p className="text-sm text-gray-500">
-              Gemini AI ile akıllı segmentasyon ve filtre önerileri
+              Smart segmentation and filter suggestions powered by Native AI
             </p>
           </div>
         </div>

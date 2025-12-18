@@ -47,7 +47,7 @@ const PreviousAnalyses: React.FC = () => {
       navigate('/overview');
     } catch (err) {
       console.error('Failed to load dataset:', err);
-      alert('Dataset yüklenemedi. Dosya silinmiş olabilir.');
+      alert('Could not load dataset. The file may have been deleted.');
     }
   };
 
@@ -58,7 +58,7 @@ const PreviousAnalyses: React.FC = () => {
       setDeleteConfirm(null);
     } catch (err) {
       console.error('Failed to delete dataset:', err);
-      alert('Silme işlemi başarısız.');
+      alert('Delete operation failed.');
     }
   };
 
@@ -78,13 +78,13 @@ const PreviousAnalyses: React.FC = () => {
   const getStatusLabel = (status: string | null) => {
     switch (status) {
       case 'green':
-        return 'Dijital İkiz Uygun';
+        return 'Digital Twin Ready';
       case 'yellow':
-        return 'Dikkat Gerekli';
+        return 'Needs Attention';
       case 'red':
-        return 'Uygun Değil';
+        return 'Not Ready';
       default:
-        return 'Belirsiz';
+        return 'Unknown';
     }
   };
 
@@ -94,7 +94,7 @@ const PreviousAnalyses: React.FC = () => {
 
   const formatDate = (dateStr: string) => {
     const date = new Date(dateStr);
-    return date.toLocaleDateString('tr-TR', {
+    return date.toLocaleDateString('en-US', {
       day: '2-digit',
       month: 'long',
       year: 'numeric',
@@ -111,10 +111,10 @@ const PreviousAnalyses: React.FC = () => {
           <div>
             <h1 className="text-3xl font-bold text-gray-900 flex items-center">
               <Clock className="mr-3 text-blue-600" />
-              Önceki Analizler
+              Previous Analyses
             </h1>
             <p className="text-gray-500 mt-1">
-              Daha önce yüklenen SAV dosyalarınızın analizlerine ulaşın
+              Access your previously uploaded SAV file analyses
             </p>
           </div>
           <button
@@ -122,7 +122,7 @@ const PreviousAnalyses: React.FC = () => {
             className="flex items-center space-x-2 px-4 py-2 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
           >
             <RefreshCw size={18} className={loading ? 'animate-spin' : ''} />
-            <span>Yenile</span>
+            <span>Refresh</span>
           </button>
         </div>
 
@@ -131,7 +131,7 @@ const PreviousAnalyses: React.FC = () => {
           <Search className="absolute left-4 top-3 text-gray-400" size={20} />
           <input
             type="text"
-            placeholder="Dosya adına göre ara..."
+            placeholder="Search by filename..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             className="w-full pl-12 pr-4 py-3 bg-white border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-sm"
@@ -142,7 +142,7 @@ const PreviousAnalyses: React.FC = () => {
         {loading && (
           <div className="text-center py-20">
             <RefreshCw className="animate-spin mx-auto mb-4 text-blue-600" size={40} />
-            <p className="text-gray-500">Analizler yükleniyor...</p>
+            <p className="text-gray-500">Loading analyses...</p>
           </div>
         )}
 
@@ -150,15 +150,15 @@ const PreviousAnalyses: React.FC = () => {
         {!loading && datasets.length === 0 && (
           <div className="text-center py-20 bg-white rounded-2xl border border-gray-100 shadow-sm">
             <FileSpreadsheet className="mx-auto mb-4 text-gray-300" size={60} />
-            <h3 className="text-xl font-semibold text-gray-700 mb-2">Henüz analiz yok</h3>
+            <h3 className="text-xl font-semibold text-gray-700 mb-2">No analyses yet</h3>
             <p className="text-gray-500 mb-6">
-              İlk SAV dosyanızı yükleyerek başlayın
+              Get started by uploading your first SAV file
             </p>
             <button
               onClick={() => navigate('/')}
               className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition-colors"
             >
-              Dosya Yükle
+              Upload File
             </button>
           </div>
         )}
@@ -193,28 +193,28 @@ const PreviousAnalyses: React.FC = () => {
                       <div className="text-center">
                         <div className="flex items-center text-gray-500 text-sm mb-1">
                           <Users size={14} className="mr-1" />
-                          <span>Katılımcı</span>
+                          <span>Respondents</span>
                         </div>
                         <span className="font-bold text-gray-900">{dataset.nRows?.toLocaleString()}</span>
                       </div>
                       <div className="text-center">
                         <div className="flex items-center text-gray-500 text-sm mb-1">
                           <LayoutGrid size={14} className="mr-1" />
-                          <span>Değişken</span>
+                          <span>Variables</span>
                         </div>
                         <span className="font-bold text-gray-900">{dataset.nCols?.toLocaleString()}</span>
                       </div>
                       <div className="text-center">
-                        <div className="text-gray-500 text-sm mb-1">Kalite Skoru</div>
+                        <div className="text-gray-500 text-sm mb-1">Quality Score</div>
                         <span className={`font-bold ${
                           (dataset.dataQualityScore || 0) >= 80 ? 'text-green-600' :
                           (dataset.dataQualityScore || 0) >= 60 ? 'text-amber-600' : 'text-red-600'
                         }`}>
-                          %{dataset.dataQualityScore?.toFixed(0) || '-'}
+                          {dataset.dataQualityScore?.toFixed(0) || '-'}%
                         </span>
                       </div>
                       <div className="text-center min-w-[120px]">
-                        <div className="text-gray-500 text-sm mb-1">Dijital İkiz</div>
+                        <div className="text-gray-500 text-sm mb-1">Digital Twin</div>
                         <span className={`text-sm font-medium px-2 py-1 rounded-full ${
                           dataset.digitalTwinReadiness === 'green' ? 'bg-green-100 text-green-700' :
                           dataset.digitalTwinReadiness === 'yellow' ? 'bg-amber-100 text-amber-700' :
@@ -235,13 +235,13 @@ const PreviousAnalyses: React.FC = () => {
                           onClick={() => handleDelete(dataset.id)}
                           className="px-3 py-2 bg-red-600 text-white text-sm rounded-lg hover:bg-red-700"
                         >
-                          Onayla
+                          Confirm
                         </button>
                         <button
                           onClick={() => setDeleteConfirm(null)}
                           className="px-3 py-2 bg-gray-200 text-gray-700 text-sm rounded-lg hover:bg-gray-300"
                         >
-                          İptal
+                          Cancel
                         </button>
                       </>
                     ) : (
@@ -249,7 +249,7 @@ const PreviousAnalyses: React.FC = () => {
                         <button
                           onClick={() => setDeleteConfirm(dataset.id)}
                           className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                          title="Sil"
+                          title="Delete"
                         >
                           <Trash2 size={18} />
                         </button>
@@ -257,7 +257,7 @@ const PreviousAnalyses: React.FC = () => {
                           onClick={() => handleSelect(dataset)}
                           className="flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
                         >
-                          <span>Görüntüle</span>
+                          <span>View</span>
                           <ChevronRight size={18} />
                         </button>
                       </>
@@ -273,7 +273,7 @@ const PreviousAnalyses: React.FC = () => {
         {!loading && datasets.length > 0 && filteredDatasets.length === 0 && (
           <div className="text-center py-12 bg-white rounded-2xl border border-gray-100">
             <Search className="mx-auto mb-4 text-gray-300" size={40} />
-            <p className="text-gray-500">"{searchTerm}" için sonuç bulunamadı</p>
+            <p className="text-gray-500">No results found for "{searchTerm}"</p>
           </div>
         )}
       </div>
@@ -282,4 +282,3 @@ const PreviousAnalyses: React.FC = () => {
 };
 
 export default PreviousAnalyses;
-
