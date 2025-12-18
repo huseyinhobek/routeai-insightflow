@@ -753,43 +753,40 @@ const Exports: React.FC = () => {
       <h3 className="text-xl font-bold text-gray-900 mb-2">{title}</h3>
       <p className="text-gray-500 mb-6 text-sm leading-relaxed">{desc}</p>
       <div className="flex gap-2">
-      <button 
-          onClick={onDownload}
-        disabled={downloading === type}
-          className={`flex-1 font-medium py-3 rounded-xl flex items-center justify-center space-x-2 transition-all ${
-          downloaded.has(type)
-            ? 'bg-green-100 text-green-700 border border-green-300'
-            : highlight
-            ? 'bg-blue-600 text-white hover:bg-blue-700'
-            : 'border border-gray-300 text-gray-700 hover:bg-gray-50'
-        }`}
-      >
-        {downloading === type ? (
-          <>
-            <Loader2 size={18} className="animate-spin" />
-              <span>Generating...</span>
-          </>
-        ) : downloaded.has(type) ? (
-          <>
-            <CheckCircle size={18} />
-              <span>Downloaded</span>
-          </>
-        ) : (
-          <>
-            <Download size={18} />
-              <span>Download</span>
-          </>
-        )}
-      </button>
         {onPreview && (
           <button
             onClick={onPreview}
-            className="px-4 py-3 rounded-xl border border-gray-300 text-gray-700 hover:bg-gray-50 transition-all"
-            title="Preview"
+            className={`flex-1 font-medium py-3 rounded-xl flex items-center justify-center space-x-2 transition-all ${
+              highlight
+                ? 'bg-blue-600 text-white hover:bg-blue-700'
+                : 'border border-gray-300 text-gray-700 hover:bg-gray-50'
+            }`}
           >
             <Eye size={18} />
+            <span>View Report</span>
           </button>
         )}
+        <button 
+          onClick={onDownload}
+          disabled={downloading === type}
+          className={`${onPreview ? 'px-4' : 'flex-1'} font-medium py-3 rounded-xl flex items-center justify-center space-x-2 transition-all ${
+            downloaded.has(type)
+              ? 'bg-green-100 text-green-700 border border-green-300'
+              : 'border border-gray-300 text-gray-700 hover:bg-gray-50'
+          }`}
+          title="Download"
+        >
+          {downloading === type ? (
+            <Loader2 size={18} className="animate-spin" />
+          ) : downloaded.has(type) ? (
+            <CheckCircle size={18} />
+          ) : (
+            <Download size={18} />
+          )}
+          {!onPreview && (
+            <span>{downloading === type ? 'Generating...' : downloaded.has(type) ? 'Downloaded' : 'Download'}</span>
+          )}
+        </button>
       </div>
     </div>
   );
@@ -860,23 +857,6 @@ const Exports: React.FC = () => {
         </div>
       </div>
 
-      {/* Report Preview Info */}
-      <div className="mt-6 p-4 bg-blue-50 rounded-xl border border-blue-100">
-        <div className="flex items-start space-x-3">
-          <div className="bg-blue-100 p-2 rounded-lg">
-            <FileCode className="text-blue-600" size={20} />
-          </div>
-          <div>
-            <h4 className="font-semibold text-blue-900">Professional HTML Report</h4>
-            <p className="text-sm text-blue-700 mt-1">
-              The HTML report includes your company logo, executive summary, all quality metrics, 
-              {appliedFiltersCount > 0 ? ` ${appliedFiltersCount} applied smart filters with details,` : ' smart filter status,'} 
-              issues & recommendations, and a detailed variable quality table. 
-              Perfect for sharing with clients and stakeholders.
-            </p>
-          </div>
-        </div>
-      </div>
     </div>
   );
 };
