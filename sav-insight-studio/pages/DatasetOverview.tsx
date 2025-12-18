@@ -86,8 +86,8 @@ const DatasetOverview: React.FC = () => {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
         <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
           <h3 className="text-lg font-bold text-gray-900 mb-6">Variable Types Distribution</h3>
-          <div className="h-64 w-full min-w-0">
-            <ResponsiveContainer width="100%" height="100%" minHeight={256}>
+          <div className="h-64 w-full min-w-0" style={{ minHeight: '256px' }}>
+            <ResponsiveContainer width="100%" height="100%" minHeight={256} aspect={undefined}>
               <PieChart>
                 <Pie
                   data={typeData}
@@ -118,8 +118,8 @@ const DatasetOverview: React.FC = () => {
 
         <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
           <h3 className="text-lg font-bold text-gray-900 mb-6">Lowest Completion Rates</h3>
-          <div className="h-64 w-full min-w-0">
-            <ResponsiveContainer width="100%" height="100%" minHeight={256}>
+          <div className="h-64 w-full min-w-0" style={{ minHeight: '256px' }}>
+            <ResponsiveContainer width="100%" height="100%" minHeight={256} aspect={undefined}>
                <BarChart data={missingHeavyVars} layout="vertical" margin={{ top: 5, right: 30, left: 40, bottom: 5 }}>
                   <XAxis type="number" domain={[0, 100]} hide />
                   <YAxis dataKey="code" type="category" width={60} tick={{fontSize: 12}} />
