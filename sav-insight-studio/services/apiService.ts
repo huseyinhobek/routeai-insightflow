@@ -105,6 +105,21 @@ class ApiService {
     if (!response.ok) throw new Error('Failed to fetch config');
     return response.json();
   }
+
+  async generateSmartFilters(datasetId: string, maxFilters = 8): Promise<SmartFilterResponse> {
+    const response = await fetch(`${API_BASE_URL}/smart-filters/generate`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ datasetId, maxFilters }),
+    });
+
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ detail: 'Failed to generate smart filters' }));
+      throw new Error(error.detail || 'Failed to generate smart filters');
+    }
+
+    return response.json();
+  }
 }
 
 export const apiService = new ApiService();

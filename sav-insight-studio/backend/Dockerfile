@@ -14,6 +14,11 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy application code
 COPY main.py .
+COPY config.py .
+COPY database.py .
+COPY models.py .
+COPY services/ ./services/
+COPY uploads/ ./uploads/
 
 # Create upload directory
 RUN mkdir -p /tmp/sav_uploads

@@ -14,8 +14,13 @@ class Settings(BaseSettings):
     # Database
     DATABASE_URL: str = "postgresql://postgres:postgres@localhost:5432/sav_insight"
     
-    # Gemini API
+    # Gemini API (legacy)
     GEMINI_API_KEY: Optional[str] = None
+    
+    # OpenAI API (for Twin Transformer)
+    OPENAI_API_KEY: Optional[str] = None
+    OPENAI_MODEL: str = "gpt-5-mini"
+    OPENAI_REASONING_EFFORT: str = "minimal"
     
     # Upload settings
     UPLOAD_DIR: str = "./uploads"

@@ -8,6 +8,7 @@ import SmartFilters from './pages/SmartFilters';
 import Exports from './pages/Exports';
 import PreviousAnalyses from './pages/PreviousAnalyses';
 import QualityReport from './pages/QualityReport';
+import TwinTransformer from './pages/TwinTransformer';
 
 const App: React.FC = () => {
   return (
@@ -20,6 +21,7 @@ const App: React.FC = () => {
           <Route path="/quality" element={<QualityReport />} />
           <Route path="/variables" element={<VariableExplorer />} />
           <Route path="/filters" element={<SmartFilters />} />
+          <Route path="/twin-transformer" element={<TwinTransformer />} />
           <Route path="/exports" element={<Exports />} />
         </Route>
       </Routes>

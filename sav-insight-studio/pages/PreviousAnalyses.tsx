@@ -56,6 +56,24 @@ const PreviousAnalyses: React.FC = () => {
       await apiService.deleteDataset(id);
       setDatasets(datasets.filter(d => d.id !== id));
       setDeleteConfirm(null);
+      
+      // Clean up all localStorage keys related to this dataset
+      const keysToRemove: string[] = [];
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key && (
+          key.includes(id) || // Any key containing the dataset ID
+          key === 'currentDatasetId' || // Current dataset reference
+          key === 'currentDatasetMeta' // Current dataset metadata
+        )) {
+          keysToRemove.push(key);
+        }
+      }
+      
+      // Remove all identified keys
+      keysToRemove.forEach(key => localStorage.removeItem(key));
+      
+      console.log(`[Delete] Cleaned up ${keysToRemove.length} localStorage keys for dataset ${id}`);
     } catch (err) {
       console.error('Failed to delete dataset:', err);
       alert('Delete operation failed.');

@@ -8,7 +8,8 @@ import {
   Clock, 
   Home,
   CheckSquare,
-  FileBarChart
+  FileBarChart,
+  Sparkles
 } from 'lucide-react';
 import nativeLogo from '../native-logo.png';
 
@@ -26,6 +27,7 @@ const Layout: React.FC = () => {
     { to: '/quality', icon: <FileBarChart size={20} />, label: 'Quality Report' },
     { to: '/variables', icon: <Database size={20} />, label: 'Variable Explorer' },
     { to: '/filters', icon: <Filter size={20} />, label: 'Smart Filters' },
+    { to: '/twin-transformer', icon: <Sparkles size={20} />, label: 'Twin Transformer' },
     { to: '/exports', icon: <Download size={20} />, label: 'Export' },
   ];
 
