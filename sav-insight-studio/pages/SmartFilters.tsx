@@ -459,11 +459,11 @@ const SmartFilters: React.FC = () => {
         setFilters([...aiFilters, ...manualFilters]);
         setHasGeneratedAI(true);
       } else {
-        setError('Bu dataset için uygun smart filter üretilemedi. Kategorik değişken sayısı az olabilir.');
+        setError('Unable to generate suitable smart filters for this dataset. The number of categorical variables may be insufficient.');
       }
     } catch (e: any) {
       console.error('Smart filter generation error:', e);
-      setError(e.message || 'Smart filter üretimi başarısız. Lütfen tekrar deneyin.');
+      setError(e.message || 'Smart filter generation failed. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -636,7 +636,7 @@ const SmartFilters: React.FC = () => {
             <div className="h-3 w-48 bg-gray-100 rounded"></div>
           </div>
           <p className="mt-6 text-gray-500 text-sm">
-            {meta?.variables.length} değişken analiz ediliyor, AI filter önerileri hazırlanıyor...
+            Analyzing {meta?.variables.length} variables, preparing AI filter suggestions...
           </p>
         </div>
       )}
@@ -646,13 +646,13 @@ const SmartFilters: React.FC = () => {
         <div className="bg-red-50 border border-red-200 rounded-2xl p-6 flex items-start gap-4 mb-6">
           <AlertCircle className="text-red-500 flex-shrink-0 mt-0.5" size={24} />
           <div>
-            <h3 className="font-semibold text-red-900">Üretim Başarısız</h3>
+            <h3 className="font-semibold text-red-900">Generation Failed</h3>
             <p className="text-red-700 text-sm mt-1">{error}</p>
             <button 
               onClick={generateAISuggestions}
               className="mt-4 bg-red-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-red-700 transition-colors"
             >
-              Tekrar Dene
+              Try Again
             </button>
           </div>
         </div>

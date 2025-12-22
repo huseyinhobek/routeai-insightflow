@@ -1,0 +1,79 @@
+version: "3.8"
+
+services:
+  postgres:
+    image: postgres:15
+    container_name: postgres-sav
+    environment:
+      POSTGRES_DB: sav_insight
+      POSTGRES_USER: sav_user
+      POSTGRES_PASSWORD: sav_password
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    networks:
+      - sav_net
+    restart: unless-stopped
+    # DIŞARI AÇMA: ports YOK
+
+  backend:
+    build: ./backend
+    container_name: sav-insight-backend
+    # DIŞARI AÇMA: ports YOK
+    volumes:
+      - ./backend:/app
+      - sav_uploads:/tmp/sav_uploads
+    env_file:
+      - ./backend/.env
+    environment:
+      - PYTHONUNBUFFERED=1
+      # SABİT IP YERİNE SERVİS ADI:
+      - DATABASE_URL=postgresql://sav_user:sav_password@postgres:5432/sav_insight
+    networks:
+      - sav_net
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+      args:
+        - VITE_API_BASE_URL=/sav-api
+        - VITE_BASE_PATH=/sav-insight/
+        - GEMINI_API_KEY=${GEMINI_API_KEY:-}
+    container_name: sav-insight-frontend
+    # DIŞARI AÇMA: ports YOK
+    depends_on:
+      - backend
+    networks:
+      - sav_net
+    restart: unless-stopped
+
+  gateway:
+    image: nginx:alpine
+    container_name: sav-insight-gateway
+    ports:
+      - "80:80"
+      # SSL kullanacaksan 443 de aç:
+      - "443:443"
+    volumes:
+      - ./nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
+      # Basic Auth için:
+      - ./nginx/.htpasswd:/etc/nginx/.htpasswd:ro
+    depends_on:
+      - frontend
+      - backend
+    networks:
+      - sav_net
+    restart: unless-stopped
+
+networks:
+  sav_net:
+
+volumes:
+  sav_uploads:
+  pgdata:

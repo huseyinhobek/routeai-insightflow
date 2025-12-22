@@ -184,22 +184,42 @@ const QualityReportPage: React.FC = () => {
         {/* Quality Metrics Bar Chart */}
         <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
           <h3 className="text-lg font-bold text-gray-900 mb-6">Quality Metrics</h3>
-          <div className="h-64 w-full min-w-0" style={{ minHeight: '256px' }}>
-            <ResponsiveContainer width="100%" height="100%" minHeight={256} aspect={undefined}>
-              <BarChart data={metricsData} layout="vertical">
-                <XAxis type="number" domain={[0, 100]} />
-                <YAxis type="category" dataKey="name" width={100} />
-                <Tooltip 
-                  formatter={(value: number) => `${value.toFixed(1)}%`}
-                  contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
-                />
-                <Bar 
-                  dataKey="score" 
-                  radius={[0, 4, 4, 0]}
-                  fill="#2563EB"
-                />
-              </BarChart>
-            </ResponsiveContainer>
+          <div className="w-full min-w-0 overflow-x-auto">
+            <div className="h-64 w-full min-w-[400px]" style={{ minHeight: '256px' }}>
+              <ResponsiveContainer width="100%" height="100%" minHeight={256} aspect={undefined}>
+                <BarChart data={metricsData} layout="vertical" margin={{ left: 20, right: 20, top: 10, bottom: 10 }}>
+                  <XAxis 
+                    type="number" 
+                    domain={[0, 100]} 
+                    tick={{ fontSize: 12 }}
+                    label={{ value: 'Score (%)', position: 'insideBottom', offset: -5, style: { textAnchor: 'middle', fontSize: 12 } }}
+                  />
+                  <YAxis 
+                    type="category" 
+                    dataKey="name" 
+                    width={120}
+                    tick={{ fontSize: 12 }}
+                    interval={0}
+                    tickFormatter={(value) => {
+                      // Wrap long metric names
+                      if (value.length > 15) {
+                        return value.substring(0, 13) + '...';
+                      }
+                      return value;
+                    }}
+                  />
+                  <Tooltip 
+                    formatter={(value: number) => `${value.toFixed(1)}%`}
+                    contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
+                  />
+                  <Bar 
+                    dataKey="score" 
+                    radius={[0, 4, 4, 0]}
+                    fill="#2563EB"
+                  />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
           </div>
         </div>
 
