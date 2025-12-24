@@ -30,6 +30,7 @@ interface LiveOutputProps {
   onPause: () => void;
   onResume: () => void;
   onStop: () => void;
+  onCancel?: () => void;
   onChangeSettings?: () => void;
   onChangeColumns?: () => void;
   onReset: () => void;
@@ -56,6 +57,7 @@ const LiveOutput: React.FC<LiveOutputProps> = ({
   onPause,
   onResume,
   onStop,
+  onCancel,
   onReset,
   onExportJson,
   onExportCsv,
@@ -112,6 +114,8 @@ const LiveOutput: React.FC<LiveOutputProps> = ({
         return 'text-blue-600 bg-blue-100';
       case 'failed':
         return 'text-red-600 bg-red-100';
+      case 'cancelled':
+        return 'text-orange-600 bg-orange-100';
       default:
         return 'text-gray-600 bg-gray-100';
     }
@@ -129,6 +133,8 @@ const LiveOutput: React.FC<LiveOutputProps> = ({
         return 'Failed';
       case 'idle':
         return 'Idle';
+      case 'cancelled':
+        return 'Cancelled';
       default:
         return status;
     }
@@ -188,29 +194,62 @@ const LiveOutput: React.FC<LiveOutputProps> = ({
                 </button>
                 <button
                   onClick={onStop}
-                  className="flex items-center space-x-2 px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors"
+                  className="flex items-center space-x-2 px-4 py-2 bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition-colors"
+                  title="Stop - pause the job, can resume later"
                 >
                   <Square size={18} />
                   <span>Stop</span>
                 </button>
+                {onCancel && (
+                  <button
+                    onClick={onCancel}
+                    className="flex items-center space-x-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
+                    title="Cancel - stop and clear waiting queue, keep completed results"
+                  >
+                    <XCircle size={18} />
+                    <span>Cancel</span>
+                  </button>
+                )}
               </>
             )}
 
-            {job?.status === 'paused' && (
+            {(job?.status === 'paused' || job?.status === 'cancelled') && (
               <>
                 <button
                   onClick={onResume}
                   className="flex items-center space-x-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+                  title="Resume with current or new settings"
                 >
                   <Play size={18} />
                   <span>Resume</span>
                 </button>
+                {onChangeSettings && (
+                  <button
+                    onClick={onChangeSettings}
+                    className="flex items-center space-x-2 px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
+                    title="Change concurrency and other settings before resuming"
+                  >
+                    <Settings size={18} />
+                    <span>Settings</span>
+                  </button>
+                )}
+                {onCancel && job?.status === 'paused' && (
+                  <button
+                    onClick={onCancel}
+                    className="flex items-center space-x-2 px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors"
+                    title="Cancel - clear waiting queue, keep completed results"
+                  >
+                    <XCircle size={18} />
+                    <span>Cancel Job</span>
+                  </button>
+                )}
                 <button
                   onClick={() => setShowResetConfirm(true)}
                   className="flex items-center space-x-2 px-4 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600 transition-colors"
+                  title="Reset - delete ALL results and start fresh"
                 >
                   <RotateCcw size={18} />
-                  <span>Reset</span>
+                  <span>Reset All</span>
                 </button>
               </>
             )}

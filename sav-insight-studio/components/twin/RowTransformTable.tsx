@@ -79,7 +79,22 @@ export default function RowTransformTable({
 
   const visibleSmartFilters = useMemo(() => (smartFilters || []).filter(f => (f.sourceVars || []).length > 0), [smartFilters]);
 
-  const totalRows = rowsResponse?.total ?? datasetMeta.nRows ?? 0;
+  // When job is cancelled, only show rows that were actually processed
+  const effectiveRowLimit = useMemo(() => {
+    if (job?.status === 'cancelled') {
+      // Only show rows up to what was processed
+      return job.processedRows + job.failedRows;
+    }
+    // For completed jobs with rowLimit, show up to rowLimit
+    if (job?.status === 'completed' && job.rowLimit) {
+      return Math.min(job.rowLimit, datasetMeta.nRows);
+    }
+    return datasetMeta.nRows;
+  }, [job?.status, job?.processedRows, job?.failedRows, job?.rowLimit, datasetMeta.nRows]);
+
+  const totalRows = job?.status === 'cancelled' 
+    ? effectiveRowLimit 
+    : (rowsResponse?.total ?? datasetMeta.nRows ?? 0);
   const totalPages = pageSize > 0 ? Math.max(1, Math.ceil(totalRows / pageSize)) : 1;
 
   const formatValue = (code: string, value: any) => {
@@ -128,6 +143,10 @@ export default function RowTransformTable({
       return { text: 'Waiting', cls: 'bg-gray-50 text-gray-500 border border-gray-200' };
     }
     if (job?.status === 'paused') return { text: 'Paused', cls: 'bg-amber-50 text-amber-600 border border-amber-200' };
+    if (job?.status === 'cancelled') {
+      // Cancelled job - rows without result were not processed
+      return { text: 'Cancelled', cls: 'bg-orange-50 text-orange-600 border border-orange-200' };
+    }
     if (job?.status === 'completed') {
       // If job completed but no result, it might not have been processed
       return { text: 'Not Processed', cls: 'bg-gray-50 text-gray-400 border border-gray-200' };
@@ -135,7 +154,18 @@ export default function RowTransformTable({
     return { text: 'Waiting', cls: 'bg-gray-50 text-gray-500 border border-gray-200' };
   };
 
-  const rows = rowsResponse?.rows || [];
+  // Filter rows based on job status - for cancelled jobs, only show processed rows
+  const allRows = rowsResponse?.rows || [];
+  const rows = useMemo(() => {
+    if (job?.status === 'cancelled') {
+      // Only show rows that have results (were actually processed)
+      return allRows.filter(row => {
+        const result = resultsByRowIndex[row.index];
+        return result !== undefined;
+      });
+    }
+    return allRows;
+  }, [allRows, job?.status, resultsByRowIndex]);
 
   return (
     <div className="bg-white rounded-xl border border-gray-200 shadow-lg overflow-hidden">
@@ -242,8 +272,19 @@ export default function RowTransformTable({
             <tbody className="divide-y divide-gray-100">
               {rows.length === 0 ? (
                 <tr>
-                  <td colSpan={7 + visibleSmartFilters.length} className="px-6 py-10 text-center text-gray-500">
-                    No rows found
+                  <td colSpan={7 + visibleSmartFilters.length} className="px-6 py-10 text-center">
+                    {job?.status === 'cancelled' ? (
+                      <div className="flex flex-col items-center space-y-2">
+                        <span className="text-orange-600 font-medium">Job was cancelled</span>
+                        <span className="text-gray-500 text-sm">
+                          {effectiveRowLimit === 0 
+                            ? 'No rows were processed before cancellation. Click Resume to start processing.'
+                            : `${effectiveRowLimit} rows were processed before cancellation.`}
+                        </span>
+                      </div>
+                    ) : (
+                      <span className="text-gray-500">No rows found</span>
+                    )}
                   </td>
                 </tr>
               ) : (

@@ -1080,6 +1080,77 @@ class TransformService:
         
         return True
     
+    def cancel_job(self, db: Session, job_id: str) -> dict:
+        """
+        Cancel a job - stops execution, removes waiting/pending results, 
+        but KEEPS completed/failed results. Allows resuming with new settings.
+        """
+        job = self.get_job(db, job_id)
+        if not job:
+            return {"success": False, "error": "Job not found"}
+        
+        # Stop the job first
+        self._job_stop_flags[job_id] = True
+        self._job_pause_flags[job_id] = False
+        
+        # Cancel any running task
+        task = self._running_jobs.pop(job_id, None)
+        if task:
+            try:
+                task.cancel()
+            except Exception:
+                pass
+        
+        # Count results before deletion
+        completed_count = db.query(TransformResult).filter(
+            TransformResult.job_id == job_id,
+            TransformResult.status.in_(["completed", "failed"])
+        ).count()
+        
+        waiting_count = db.query(TransformResult).filter(
+            TransformResult.job_id == job_id,
+            TransformResult.status.in_(["waiting", "pending", "processing"])
+        ).count()
+        
+        # Delete ONLY waiting/pending/processing results - keep completed and failed
+        db.query(TransformResult).filter(
+            TransformResult.job_id == job_id,
+            TransformResult.status.in_(["waiting", "pending", "processing"])
+        ).delete(synchronize_session=False)
+        
+        # Update job state - set to cancelled status, update processed count
+        actual_processed = db.query(TransformResult).filter(
+            TransformResult.job_id == job_id,
+            TransformResult.status == "completed"
+        ).count()
+        
+        actual_failed = db.query(TransformResult).filter(
+            TransformResult.job_id == job_id,
+            TransformResult.status == "failed"
+        ).count()
+        
+        job.status = "cancelled"
+        job.processed_rows = actual_processed
+        job.failed_rows = actual_failed
+        job.current_row_index = actual_processed + actual_failed
+        job.row_limit = actual_processed + actual_failed  # Set limit to current progress
+        job.last_error = None
+        
+        db.commit()
+        
+        # Clear flags
+        self._job_stop_flags.pop(job_id, None)
+        self._job_pause_flags.pop(job_id, None)
+        
+        logger.info(f"Job {job_id} cancelled. Kept {completed_count} completed results, removed {waiting_count} waiting results.")
+        
+        return {
+            "success": True,
+            "completedKept": completed_count,
+            "waitingRemoved": waiting_count,
+            "newRowLimit": job.row_limit
+        }
+    
     def reset_job(self, db: Session, job_id: str, confirm_text: str) -> bool:
         """Reset a job - requires confirmation"""
         if confirm_text != "DELETE":

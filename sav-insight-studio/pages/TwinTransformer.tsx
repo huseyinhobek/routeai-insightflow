@@ -22,6 +22,7 @@ import {
   SmartFilter
 } from '../types';
 import { transformService } from '../services/transformService';
+import { apiService } from '../services/apiService';
 import ColumnAnalysis from '../components/twin/ColumnAnalysis';
 import TransformSettings from '../components/twin/TransformSettings';
 import LiveOutput from '../components/twin/LiveOutput';
@@ -99,6 +100,8 @@ const TwinTransformer: React.FC = () => {
     rowLimit: number;
     processAllRows: boolean;
   } | null>(null);
+  // Flag to prevent settings change detection when loading settings from job
+  const [isLoadingSettingsFromJob, setIsLoadingSettingsFromJob] = useState(false);
 
   // Modal states
   const [showSettingsModal, setShowSettingsModal] = useState(false);
@@ -181,6 +184,8 @@ const TwinTransformer: React.FC = () => {
             const stored = localStorage.getItem(key);
             if (stored) {
               const state = JSON.parse(stored);
+              // Set flag to prevent settings change detection during loading
+              setIsLoadingSettingsFromJob(true);
               if (state.step) setCurrentStep(state.step);
               if (state.analysisResult) setAnalysisResult(state.analysisResult);
               if (state.selectedAdminColumns) setSelectedAdminColumns(state.selectedAdminColumns);
@@ -194,6 +199,7 @@ const TwinTransformer: React.FC = () => {
               if (state.respondentIdColumn !== undefined) setRespondentIdColumn(state.respondentIdColumn);
               if (state.rowsPageSize) setRowsPageSize(state.rowsPageSize);
               if (state.rowsPageIndex) setRowsPageIndex(state.rowsPageIndex);
+              setTimeout(() => setIsLoadingSettingsFromJob(false), 100);
             }
           } catch (e) {
             console.error('Failed to load state:', e);
@@ -207,6 +213,8 @@ const TwinTransformer: React.FC = () => {
             const stored = localStorage.getItem(key);
             if (stored) {
               const state = JSON.parse(stored);
+              // Set flag to prevent settings change detection during loading
+              setIsLoadingSettingsFromJob(true);
               if (state.step) setCurrentStep(state.step);
               if (state.analysisResult) setAnalysisResult(state.analysisResult);
               if (state.selectedAdminColumns) setSelectedAdminColumns(state.selectedAdminColumns);
@@ -220,6 +228,7 @@ const TwinTransformer: React.FC = () => {
               if (state.respondentIdColumn !== undefined) setRespondentIdColumn(state.respondentIdColumn);
               if (state.rowsPageSize) setRowsPageSize(state.rowsPageSize);
               if (state.rowsPageIndex) setRowsPageIndex(state.rowsPageIndex);
+              setTimeout(() => setIsLoadingSettingsFromJob(false), 100);
             }
           } catch (e) {
             console.error('Failed to load state:', e);
@@ -251,11 +260,14 @@ const TwinTransformer: React.FC = () => {
         setSelectedAdminColumns(currentJob.adminColumns);
       }
       
-      // Load other settings
+      // Load other settings - set flag to prevent settings change detection
+      setIsLoadingSettingsFromJob(true);
       if (currentJob.chunkSize) setChunkSize(currentJob.chunkSize);
       if (currentJob.rowConcurrency) setRowConcurrency(currentJob.rowConcurrency);
       if (currentJob.rowLimit) setRowLimit(currentJob.rowLimit);
       if (currentJob.respondentIdColumn) setRespondentIdColumn(currentJob.respondentIdColumn);
+      // Clear flag after a short delay to allow state updates to complete
+      setTimeout(() => setIsLoadingSettingsFromJob(false), 100);
     }
   }, [currentJob?.jobId]); // Only when job ID changes
 
@@ -366,49 +378,80 @@ const TwinTransformer: React.FC = () => {
   }, [currentPage, rowsPageIndex, rowsPageSize]);
 
   // Load active smart filters (used as columns in the results table)
-  // Supports both new extended format and legacy format for backwards compatibility
+  // Loads from database, with localStorage fallback for migration
   useEffect(() => {
     if (!datasetMeta?.id) return;
-    try {
-      // Try new extended format first (from updated SmartFilters page)
-      const extendedRaw = localStorage.getItem(`extendedSmartFilters_${datasetMeta.id}`);
-      if (extendedRaw) {
-        interface ExtendedFilter {
-          id: string;
-          title: string;
-          sourceVars: string[];
-          isApplied: boolean;
-          source: 'ai' | 'manual';
+    
+    const loadFilters = async () => {
+      try {
+        // Try to load from database first
+        const result = await apiService.getSmartFilters(datasetMeta.id);
+        if (result && result.filters && result.filters.length > 0) {
+          interface ExtendedFilter {
+            id: string;
+            title: string;
+            sourceVars: string[];
+            isApplied?: boolean;
+            source?: 'ai' | 'manual';
+          }
+          const extendedFilters = result.filters as ExtendedFilter[];
+          const active = extendedFilters
+            .filter(f => f.isApplied !== false) // Default to active if isApplied is not set
+            .map(f => ({ id: f.id, title: f.title, sourceVars: f.sourceVars || [], source: f.source }));
+          setActiveSmartFilters(active);
+          return;
         }
-        const extendedFilters = JSON.parse(extendedRaw) as ExtendedFilter[];
-        const active = extendedFilters
-          .filter(f => f.isApplied)
-          .map(f => ({ id: f.id, title: f.title, sourceVars: f.sourceVars || [], source: f.source }));
-        setActiveSmartFilters(active);
-        return;
+      } catch (e) {
+        console.error('Failed to load smart filters from database:', e);
       }
       
-      // Fallback to legacy format
-      const rawRecs = localStorage.getItem(`smartFilters_${datasetMeta.id}`);
-      const rawActive = localStorage.getItem(`activeFilters_${datasetMeta.id}`);
-      if (!rawRecs || !rawActive) {
+      // Fallback: try localStorage (migration support)
+      try {
+        const extendedRaw = localStorage.getItem(`extendedSmartFilters_${datasetMeta.id}`);
+        if (extendedRaw) {
+          interface ExtendedFilter {
+            id: string;
+            title: string;
+            sourceVars: string[];
+            isApplied: boolean;
+            source: 'ai' | 'manual';
+          }
+          const extendedFilters = JSON.parse(extendedRaw) as ExtendedFilter[];
+          const active = extendedFilters
+            .filter(f => f.isApplied)
+            .map(f => ({ id: f.id, title: f.title, sourceVars: f.sourceVars || [], source: f.source }));
+          setActiveSmartFilters(active);
+          return;
+        }
+        
+        // Legacy format fallback
+        const rawRecs = localStorage.getItem(`smartFilters_${datasetMeta.id}`);
+        const rawActive = localStorage.getItem(`activeFilters_${datasetMeta.id}`);
+        if (!rawRecs || !rawActive) {
+          setActiveSmartFilters([]);
+          return;
+        }
+        const recs = JSON.parse(rawRecs) as SmartFilterResponse;
+        const activeIds = new Set<string>(JSON.parse(rawActive) as string[]);
+        const filters: SmartFilter[] = (recs as any)?.filters || [];
+        const active = filters
+          .filter(f => activeIds.has(f.id))
+          .map(f => ({ id: f.id, title: f.title, sourceVars: f.sourceVars || [] }));
+        setActiveSmartFilters(active);
+      } catch (e) {
+        console.error('Failed to load smart filters from localStorage:', e);
         setActiveSmartFilters([]);
-        return;
       }
-      const recs = JSON.parse(rawRecs) as SmartFilterResponse;
-      const activeIds = new Set<string>(JSON.parse(rawActive) as string[]);
-      const filters: SmartFilter[] = (recs as any)?.filters || [];
-      const active = filters
-        .filter(f => activeIds.has(f.id))
-        .map(f => ({ id: f.id, title: f.title, sourceVars: f.sourceVars || [] }));
-      setActiveSmartFilters(active);
-    } catch (e) {
-      setActiveSmartFilters([]);
-    }
+    };
+    
+    loadFilters();
   }, [datasetMeta?.id]);
 
   // Detect settings changes when job is running
   useEffect(() => {
+    // Skip detection if we're loading settings from job
+    if (isLoadingSettingsFromJob) return;
+    
     if (!currentJob || currentJob.status !== 'running') {
       setPreviousSettings(null);
       return;
@@ -437,7 +480,7 @@ const TwinTransformer: React.FC = () => {
       // Initialize previous settings
       setPreviousSettings(currentSettings);
     }
-  }, [chunkSize, rowConcurrency, rowLimit, processAllRows, currentJob?.status]);
+  }, [chunkSize, rowConcurrency, rowLimit, processAllRows, currentJob?.status, isLoadingSettingsFromJob]);
 
   // Save previous settings when job starts
   useEffect(() => {
@@ -702,8 +745,13 @@ const TwinTransformer: React.FC = () => {
           startPolling(response.jobId);
         }
       } else {
-        // Normal resume for paused jobs
-        await transformService.resumeJob(currentJob.jobId);
+        // Normal resume for paused jobs - include current settings
+        // Use latest UI settings if changed, otherwise use job settings
+        await transformService.resumeJob(currentJob.jobId, {
+          rowConcurrency: rowConcurrency || currentJob.rowConcurrency,
+          chunkSize: chunkSize || currentJob.chunkSize,
+          rowLimit: rowLimit || currentJob.rowLimit || undefined,
+        });
         const status = await transformService.getJobStatus(currentJob.jobId);
         setCurrentJob(status);
         startPolling(currentJob.jobId);
@@ -724,6 +772,23 @@ const TwinTransformer: React.FC = () => {
       setCurrentJob(status);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to stop');
+    }
+  };
+
+  const handleCancel = async () => {
+    if (!currentJob) return;
+    try {
+      const result = await transformService.cancelJob(currentJob.jobId);
+      if (pollCleanup) pollCleanup();
+      
+      // Get updated job status
+      const status = await transformService.getJobStatus(currentJob.jobId);
+      setCurrentJob(status);
+      
+      // Show success message
+      console.log(`Job cancelled: Kept ${result.completedKept} completed, removed ${result.waitingRemoved} waiting`);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to cancel');
     }
   };
 
@@ -1170,6 +1235,7 @@ const TwinTransformer: React.FC = () => {
               onPause={handlePause}
               onResume={handleResume}
               onStop={handleStop}
+              onCancel={handleCancel}
               onReset={handleReset}
               onExportJson={handleExportJson}
               onExportCsv={handleExportCsv}

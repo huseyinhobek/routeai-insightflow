@@ -25,12 +25,18 @@ from dataclasses import asdict
 # Local imports
 from config import settings
 from database import get_db, init_db, engine, Base, DATABASE_AVAILABLE
-from models import Dataset, Variable, ExportHistory, AnalysisHistory, TransformJob, TransformResult, ExcludePattern
+from models import Dataset, Variable, ExportHistory, AnalysisHistory, TransformJob, TransformResult, ExcludePattern, AuditLog, User, Organization
 from services.quality_analyzer import QualityAnalyzer, QualityReport
 from services.export_service import ExportService
 from services.transform_service import transform_service, EXCLUDE_PATTERNS
 from services.smart_filter_service import smart_filter_service
 from dataclasses import asdict as dataclass_asdict
+
+# Auth imports
+from routers import auth_router, admin_router
+from middleware.org_scope import OrgScopeMiddleware, get_org_id_from_request, apply_org_filter
+from middleware.security import SecurityHeadersMiddleware
+from auth.dependencies import get_current_user, get_current_user_optional, require_permission
 
 # Create upload directory
 UPLOAD_DIR = Path(settings.UPLOAD_DIR)
@@ -46,15 +52,23 @@ app = FastAPI(
     version="2.0.0"
 )
 
-# CORS middleware - Allow all origins for development
+# Security middleware
+app.add_middleware(SecurityHeadersMiddleware)
+app.add_middleware(OrgScopeMiddleware)
+
+# CORS middleware - Use configured origins
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # In production, specify exact origins like ["http://localhost:3000", "http://localhost:3001"]
+    allow_origins=settings.allowed_origins_list,
     allow_credentials=True,
     allow_methods=["*"],
-    allow_headers=["*"],
+    allow_headers=["*", "X-CSRF-Token"],
     expose_headers=["*"],
 )
+
+# Include auth and admin routers
+app.include_router(auth_router)
+app.include_router(admin_router)
 
 # Explicit OPTIONS handler for CORS preflight
 @app.options("/{full_path:path}")
@@ -452,10 +466,26 @@ def compute_variable_stats(df: pd.DataFrame, var_name: str, var_info: dict, meta
     }
 
 
+# Import audit service
+from services.audit_service import (
+    audit_dataset_upload, audit_dataset_delete, audit_dataset_export,
+    audit_transform_start, audit_transform_pause, audit_transform_resume,
+    audit_transform_export, audit_smart_filter_generate
+)
+
+# Import export policy
+from services.export_policy import check_export_permission
+
+
 # ==================== API ENDPOINTS ====================
 
 @app.post("/api/datasets/upload")
-async def upload_dataset(file: UploadFile = File(...), db: Session = Depends(get_db)):
+async def upload_dataset(
+    request: Request,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user_optional),
+):
     """Upload and process a SAV file"""
     # Validate filename
     if not file.filename:
@@ -491,10 +521,25 @@ async def upload_dataset(file: UploadFile = File(...), db: Session = Depends(get
                 detail=f"Failed to parse SAV file: {str(parse_error)}"
             )
         
+        # Add org_id and created_by if user is authenticated
+        if current_user:
+            dataset_info["org_id"] = current_user.org_id
+            dataset_info["created_by"] = current_user.id
+        
         # Save to database
         saved_dataset = save_to_database(db, dataset_info)
         if not saved_dataset and db is not None and DATABASE_AVAILABLE:
             print(f"[UYARI] Dataset {dataset_info['id']} veritabanina kaydedilemedi, ancak dosya yuklendi")
+        
+        # Audit log
+        audit_dataset_upload(
+            db=db,
+            request=request,
+            dataset_id=dataset_info["id"],
+            filename=dataset_info["original_filename"],
+            n_rows=dataset_info["nRows"],
+            n_cols=dataset_info["nCols"],
+        )
         
         # Return response (without internal fields)
         return {
@@ -570,19 +615,21 @@ async def list_datasets(db: Session = Depends(get_db)):
 @app.get("/api/datasets/{dataset_id}")
 async def get_dataset(dataset_id: str, db: Session = Depends(get_db)):
     """Get dataset metadata"""
-    # Try cache first
+    # Try cache first - but only if we have complete info
     if dataset_id in _dataframe_cache and "info" in _dataframe_cache[dataset_id]:
         info = _dataframe_cache[dataset_id]["info"]
-        return {
-            "id": info["id"],
-            "filename": info.get("original_filename", info.get("filename")),
-            "nRows": info["nRows"],
-            "nCols": info["nCols"],
-            "createdAt": info["createdAt"],
-            "variables": info["variables"],
-            "qualityReport": info.get("qualityReport"),
-            "digitalTwinReadiness": info.get("digitalTwinReadiness")
-        }
+        # Check if cache has all required fields
+        if "variables" in info and info.get("variables"):
+            return {
+                "id": info.get("id", dataset_id),
+                "filename": info.get("original_filename", info.get("filename")),
+                "nRows": info.get("nRows", 0),
+                "nCols": info.get("nCols", 0),
+                "createdAt": info.get("createdAt"),
+                "variables": info["variables"],
+                "qualityReport": info.get("qualityReport"),
+                "digitalTwinReadiness": info.get("digitalTwinReadiness")
+            }
     
     # Try database - load metadata from DB
     if db is not None and DATABASE_AVAILABLE:
@@ -590,7 +637,10 @@ async def get_dataset(dataset_id: str, db: Session = Depends(get_db)):
         
         if dataset:
             # Try to load dataframe if not in cache (for future use)
-            df, meta = get_dataframe(dataset_id, db)
+            try:
+                df, meta = get_dataframe(dataset_id, db)
+            except Exception as e:
+                logger.warning(f"Failed to load dataframe for {dataset_id}: {e}")
             
             return {
                 "id": dataset.id,
@@ -714,7 +764,13 @@ async def get_variable_detail(dataset_id: str, var_name: str, db: Session = Depe
 
 
 @app.get("/api/datasets/{dataset_id}/export/{export_type}")
-async def export_dataset(dataset_id: str, export_type: str, db: Session = Depends(get_db)):
+async def export_dataset(
+    request: Request,
+    dataset_id: str,
+    export_type: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user_optional),
+):
     """Export dataset in various formats"""
     # Get dataset info from cache or database
     dataset_info = None
@@ -738,10 +794,16 @@ async def export_dataset(dataset_id: str, export_type: str, db: Session = Depend
     if not dataset_info:
         raise HTTPException(status_code=404, detail="Dataset not found")
     
+    # Check export permission
+    check_export_permission(db=db, user=current_user, export_type="dataset")
+    
     df, meta = get_dataframe(dataset_id, db)
     
     if df is None:
         raise HTTPException(status_code=404, detail="Dataset file not found")
+    
+    # Audit log for export
+    audit_dataset_export(db=db, request=request, dataset_id=dataset_id, export_type=export_type)
     
     if export_type == "summary":
         # Generate comprehensive summary Excel
@@ -794,9 +856,15 @@ async def export_dataset(dataset_id: str, export_type: str, db: Session = Depend
 
 
 @app.delete("/api/datasets/{dataset_id}")
-async def delete_dataset(dataset_id: str, db: Session = Depends(get_db)):
+async def delete_dataset(
+    request: Request,
+    dataset_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user_optional),
+):
     """Delete a dataset"""
     deleted = False
+    deleted_filename = None
     
     # If DB is available, also delete transform jobs/results for this dataset to avoid DB bloat
     if db is not None and DATABASE_AVAILABLE:
@@ -852,6 +920,7 @@ async def delete_dataset(dataset_id: str, db: Session = Depends(get_db)):
     if dataset_id in _dataframe_cache:
         info = _dataframe_cache[dataset_id].get("info", {})
         file_path = info.get("file_path")
+        deleted_filename = info.get("original_filename", info.get("filename"))
         if file_path and os.path.exists(file_path):
             os.remove(file_path)
         del _dataframe_cache[dataset_id]
@@ -861,6 +930,7 @@ async def delete_dataset(dataset_id: str, db: Session = Depends(get_db)):
     if db is not None and DATABASE_AVAILABLE:
         dataset = db.query(Dataset).filter(Dataset.id == dataset_id).first()
         if dataset:
+            deleted_filename = dataset.original_filename
             if os.path.exists(dataset.file_path):
                 os.remove(dataset.file_path)
             db.delete(dataset)
@@ -869,6 +939,14 @@ async def delete_dataset(dataset_id: str, db: Session = Depends(get_db)):
     
     if not deleted:
         raise HTTPException(status_code=404, detail="Dataset not found")
+    
+    # Audit log
+    audit_dataset_delete(
+        db=db,
+        request=request,
+        dataset_id=dataset_id,
+        filename=deleted_filename or "unknown",
+    )
     
     return {"message": "Dataset deleted successfully"}
 
@@ -894,7 +972,12 @@ async def get_config():
 
 @app.post("/api/smart-filters/generate")
 @app.post("/smart-filters/generate")  # nginx compatibility (sav-api rewrite)
-async def generate_smart_filters(request: dict, db: Session = Depends(get_db)):
+async def generate_smart_filters(
+    http_request: Request,
+    request: dict,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user_optional),
+):
     """
     Generate smart filter suggestions from variable metadata (NO respondent-level data sent to model).
     Then enrich with dataset-derived option counts where possible.
@@ -1100,7 +1183,90 @@ async def generate_smart_filters(request: dict, db: Session = Depends(get_db)):
                 opts.append({"key": code, "label": label, "count": cnt, "percent": pct})
             f["options"] = opts
 
-    return {"filters": clean_filters[: int(max_filters) if str(max_filters).isdigit() else 8]}
+    # Audit log
+    final_filters = clean_filters[: int(max_filters) if str(max_filters).isdigit() else 8]
+    audit_smart_filter_generate(
+        db=db,
+        request=http_request,
+        dataset_id=dataset_id,
+        filter_count=len(final_filters),
+    )
+
+    return {"filters": final_filters}
+
+
+@app.get("/api/smart-filters/{dataset_id}")
+@app.get("/smart-filters/{dataset_id}")  # nginx compatibility
+async def get_smart_filters(
+    dataset_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user_optional),
+):
+    """
+    Get saved smart filters for a dataset from database.
+    """
+    if not dataset_id:
+        raise HTTPException(status_code=400, detail="dataset_id is required")
+    
+    if db is None or not DATABASE_AVAILABLE:
+        raise HTTPException(status_code=503, detail="Database not available")
+    
+    dataset = db.query(Dataset).filter(Dataset.id == dataset_id).first()
+    if not dataset:
+        raise HTTPException(status_code=404, detail="Dataset not found")
+    
+    # Check organization access if user is authenticated
+    if current_user:
+        if dataset.org_id and current_user.org_id != dataset.org_id:
+            raise HTTPException(status_code=403, detail="Access denied to this dataset")
+    
+    # Return saved filters or empty array
+    saved_filters = dataset.smart_filters or []
+    return {"filters": saved_filters}
+
+
+@app.put("/api/smart-filters/{dataset_id}")
+@app.post("/api/smart-filters/{dataset_id}")  # Support POST for compatibility
+@app.put("/smart-filters/{dataset_id}")  # nginx compatibility
+@app.post("/smart-filters/{dataset_id}")  # nginx compatibility
+async def save_smart_filters(
+    dataset_id: str,
+    request: dict,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user_optional),
+):
+    """
+    Save smart filters for a dataset to database.
+    """
+    if not dataset_id:
+        raise HTTPException(status_code=400, detail="dataset_id is required")
+    
+    if db is None or not DATABASE_AVAILABLE:
+        raise HTTPException(status_code=503, detail="Database not available")
+    
+    dataset = db.query(Dataset).filter(Dataset.id == dataset_id).first()
+    if not dataset:
+        raise HTTPException(status_code=404, detail="Dataset not found")
+    
+    # Check organization access if user is authenticated
+    if current_user:
+        if dataset.org_id and current_user.org_id != dataset.org_id:
+            raise HTTPException(status_code=403, detail="Access denied to this dataset")
+    
+    # Get filters from request body
+    filters = request.get("filters", [])
+    if not isinstance(filters, list):
+        raise HTTPException(status_code=400, detail="filters must be an array")
+    
+    # Save to database
+    try:
+        dataset.smart_filters = filters
+        dataset.updated_at = datetime.utcnow()
+        db.commit()
+        return {"success": True, "message": f"Saved {len(filters)} smart filter(s)", "count": len(filters)}
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Failed to save smart filters: {str(e)}")
 
 
 @app.get("/api/system/cache-stats")
@@ -1344,9 +1510,11 @@ async def analyze_columns_for_transform(
 @app.post("/api/transform/start")
 @app.post("/transform/start")  # nginx compatibility (sav-api rewrite)
 async def start_transform_job(
+    http_request: Request,
     request: dict,
     background_tasks: BackgroundTasks,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user_optional),
 ):
     """Start a new transformation job"""
     if db is None or not DATABASE_AVAILABLE:
@@ -1614,6 +1782,15 @@ async def start_transform_job(
     # Start job in background thread
     _run_transform_job_in_thread(job.id, dataset_id)
     
+    # Audit log
+    audit_transform_start(
+        db=db,
+        request=http_request,
+        job_id=job.id,
+        dataset_id=dataset_id,
+        row_limit=row_limit,
+    )
+    
     return {
         "jobId": job.id,
         "status": job.status,
@@ -1624,7 +1801,12 @@ async def start_transform_job(
 
 @app.post("/api/transform/pause/{job_id}")
 @app.post("/transform/pause/{job_id}")  # nginx compatibility (sav-api rewrite)
-async def pause_transform_job(job_id: str, db: Session = Depends(get_db)):
+async def pause_transform_job(
+    request: Request,
+    job_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user_optional),
+):
     """Pause a running transformation job"""
     if db is None or not DATABASE_AVAILABLE:
         raise HTTPException(status_code=503, detail="Database not available")
@@ -1634,13 +1816,31 @@ async def pause_transform_job(job_id: str, db: Session = Depends(get_db)):
     if not success:
         raise HTTPException(status_code=400, detail="Cannot pause job - job not running")
     
+    # Audit log
+    audit_transform_pause(db=db, request=request, job_id=job_id)
+    
     return {"jobId": job_id, "status": "paused", "message": "Job paused"}
+
+
+class ResumeJobRequest(BaseModel):
+    """Optional settings to update on resume"""
+    rowConcurrency: Optional[int] = None
+    chunkSize: Optional[int] = None
+    rowLimit: Optional[int] = None
+    excludeOptions: Optional[dict] = None
+    adminColumns: Optional[list] = None
 
 
 @app.post("/api/transform/resume/{job_id}")
 @app.post("/transform/resume/{job_id}")  # nginx compatibility (sav-api rewrite)
-async def resume_transform_job(job_id: str, db: Session = Depends(get_db)):
-    """Resume a paused transformation job"""
+async def resume_transform_job(
+    request: Request,
+    job_id: str,
+    body: Optional[ResumeJobRequest] = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user_optional),
+):
+    """Resume a paused transformation job with optional new settings"""
     if db is None or not DATABASE_AVAILABLE:
         raise HTTPException(status_code=503, detail="Database not available")
     
@@ -1662,6 +1862,33 @@ async def resume_transform_job(job_id: str, db: Session = Depends(get_db)):
         if dataset:
             variables = dataset.variables_meta or []
     
+    # Update job settings if provided in request body
+    if body:
+        try:
+            if body.rowConcurrency is not None:
+                job.row_concurrency = body.rowConcurrency
+                logger.info(f"Resume job {job_id}: Updated row_concurrency to {body.rowConcurrency}")
+            if body.chunkSize is not None:
+                job.chunk_size = body.chunkSize
+            if body.rowLimit is not None:
+                # Check if new limit is less than processed rows
+                if job.processed_rows and job.processed_rows > body.rowLimit:
+                    raise HTTPException(
+                        status_code=409,
+                        detail=f"Row limit ({body.rowLimit}) cannot be less than already processed rows ({job.processed_rows}). Reset the job first."
+                    )
+                job.row_limit = body.rowLimit
+            if body.excludeOptions is not None:
+                job.exclude_options_config = body.excludeOptions
+            if body.adminColumns is not None:
+                job.admin_columns = body.adminColumns
+            db.commit()
+        except HTTPException:
+            raise
+        except Exception as e:
+            db.rollback()
+            logger.error(f"Failed to update job settings on resume: {e}")
+    
     # Mark job as running and run via the same background-thread runner used by /start
     try:
         job.status = "running"
@@ -1674,13 +1901,23 @@ async def resume_transform_job(job_id: str, db: Session = Depends(get_db)):
         raise HTTPException(status_code=500, detail=f"Failed to resume job: {e}")
 
     _run_transform_job_in_thread(job.id, job.dataset_id)
-    return {"jobId": job_id, "status": "running", "message": "Job resumed"}
+    
+    # Audit log
+    audit_transform_resume(db=db, request=request, job_id=job_id)
+    
+    return {
+        "jobId": job_id,
+        "status": "running",
+        "message": "Job resumed",
+        "rowConcurrency": job.row_concurrency,
+        "rowLimit": job.row_limit
+    }
 
 
 @app.post("/api/transform/stop/{job_id}")
 @app.post("/transform/stop/{job_id}")  # nginx compatibility (sav-api rewrite)
 async def stop_transform_job(job_id: str, db: Session = Depends(get_db)):
-    """Stop a transformation job"""
+    """Stop a transformation job (pause)"""
     if db is None or not DATABASE_AVAILABLE:
         raise HTTPException(status_code=503, detail="Database not available")
     
@@ -1690,6 +1927,32 @@ async def stop_transform_job(job_id: str, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Job not found")
     
     return {"jobId": job_id, "status": "paused", "message": "Job stopped"}
+
+
+@app.post("/api/transform/cancel/{job_id}")
+@app.post("/transform/cancel/{job_id}")  # nginx compatibility (sav-api rewrite)
+async def cancel_transform_job(job_id: str, db: Session = Depends(get_db)):
+    """
+    Cancel a transformation job.
+    Stops execution, removes waiting/pending results, but KEEPS completed results.
+    Sets row_limit to current progress so user can resume with new settings.
+    """
+    if db is None or not DATABASE_AVAILABLE:
+        raise HTTPException(status_code=503, detail="Database not available")
+    
+    result = transform_service.cancel_job(db, job_id)
+    
+    if not result.get("success"):
+        raise HTTPException(status_code=404, detail=result.get("error", "Job not found"))
+    
+    return {
+        "jobId": job_id,
+        "status": "cancelled",
+        "message": f"Job cancelled. Kept {result['completedKept']} completed results, removed {result['waitingRemoved']} waiting.",
+        "completedKept": result["completedKept"],
+        "waitingRemoved": result["waitingRemoved"],
+        "newRowLimit": result["newRowLimit"]
+    }
 
 
 @app.delete("/api/transform/reset/{job_id}")
@@ -2004,15 +2267,34 @@ async def export_transform_results(
     data_source: str = "",
     review_rating: float = 5.0,
     review_title: str = "",  # Manual review title (same for all rows)
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user_optional),
 ):
     """Export transformation results"""
     if db is None or not DATABASE_AVAILABLE:
         raise HTTPException(status_code=503, detail="Database not available")
     
+    # Check export permission
+    check_export_permission(db=db, user=current_user, export_type="transform")
+    
     job = transform_service.get_job(db, job_id)
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
+    
+    # Count results for audit
+    result_count = db.query(TransformResult).filter(
+        TransformResult.job_id == job_id,
+        TransformResult.status == "completed"
+    ).count()
+    
+    # Audit log
+    audit_transform_export(
+        db=db,
+        request=request,
+        job_id=job_id,
+        export_format=format,
+        row_count=result_count,
+    )
     
     # Parse request body for smart filters
     smart_filters = []

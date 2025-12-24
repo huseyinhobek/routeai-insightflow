@@ -83,11 +83,28 @@ class TransformService {
   }
 
   /**
-   * Resume a paused job
+   * Resume a paused job with optional new settings
    */
-  async resumeJob(jobId: string): Promise<{ jobId: string; status: string; message: string }> {
+  async resumeJob(
+    jobId: string,
+    options?: {
+      rowConcurrency?: number;
+      chunkSize?: number;
+      rowLimit?: number;
+      excludeOptions?: Record<string, any>;
+      adminColumns?: string[];
+    }
+  ): Promise<{ jobId: string; status: string; message: string; rowConcurrency?: number; rowLimit?: number }> {
     const response = await fetch(`${API_BASE_URL}/transform/resume/${jobId}`, {
       method: 'POST',
+      headers: options ? { 'Content-Type': 'application/json' } : {},
+      body: options ? JSON.stringify({
+        rowConcurrency: options.rowConcurrency,
+        chunkSize: options.chunkSize,
+        rowLimit: options.rowLimit,
+        excludeOptions: options.excludeOptions,
+        adminColumns: options.adminColumns,
+      }) : undefined,
     });
 
     if (!response.ok) {
@@ -99,7 +116,7 @@ class TransformService {
   }
 
   /**
-   * Stop a running job
+   * Stop a running job (pause - can resume later)
    */
   async stopJob(jobId: string): Promise<{ jobId: string; status: string; message: string }> {
     const response = await fetch(`${API_BASE_URL}/transform/stop/${jobId}`, {
@@ -109,6 +126,30 @@ class TransformService {
     if (!response.ok) {
       const error = await response.json().catch(() => ({ detail: 'Failed to stop' }));
       throw new Error(error.detail || 'Failed to stop job');
+    }
+
+    return response.json();
+  }
+
+  /**
+   * Cancel a job - stops execution, removes waiting results, but KEEPS completed results.
+   * Use this when you want to stop and restart with new settings.
+   */
+  async cancelJob(jobId: string): Promise<{
+    jobId: string;
+    status: string;
+    message: string;
+    completedKept: number;
+    waitingRemoved: number;
+    newRowLimit: number;
+  }> {
+    const response = await fetch(`${API_BASE_URL}/transform/cancel/${jobId}`, {
+      method: 'POST',
+    });
+
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ detail: 'Failed to cancel' }));
+      throw new Error(error.detail || 'Failed to cancel job');
     }
 
     return response.json();

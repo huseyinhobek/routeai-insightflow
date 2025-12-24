@@ -18,26 +18,63 @@ const Exports: React.FC = () => {
       const parsedMeta = JSON.parse(stored);
       setMeta(parsedMeta);
       
-      // Load smart filters if they exist
-      const savedFilters = localStorage.getItem(`smartFilters_${parsedMeta.id}`);
-      if (savedFilters) {
+      // Load smart filters from database
+      const loadFilters = async () => {
         try {
-          const parsed = JSON.parse(savedFilters);
-          setSmartFilters(parsed.filters || []);
+          const result = await apiService.getSmartFilters(parsedMeta.id);
+          if (result && result.filters && result.filters.length > 0) {
+            setSmartFilters(result.filters);
+            // Set active filters based on isApplied flag
+            const active = result.filters
+              .filter((f: any) => f.isApplied !== false)
+              .map((f: any) => f.id);
+            setActiveFilters(active);
+          } else {
+            // Fallback: try localStorage (migration support)
+            const savedFilters = localStorage.getItem(`smartFilters_${parsedMeta.id}`);
+            if (savedFilters) {
+              try {
+                const parsed = JSON.parse(savedFilters);
+                setSmartFilters(parsed.filters || []);
+              } catch (e) {
+                console.error('Failed to parse smart filters from localStorage:', e);
+              }
+            }
+            
+            const savedActiveFilters = localStorage.getItem(`activeFilters_${parsedMeta.id}`);
+            if (savedActiveFilters) {
+              try {
+                setActiveFilters(JSON.parse(savedActiveFilters));
+              } catch (e) {
+                console.error('Failed to parse active filters from localStorage:', e);
+              }
+            }
+          }
         } catch (e) {
-          console.error('Failed to parse smart filters:', e);
+          console.error('Failed to load smart filters from database:', e);
+          // Fallback to localStorage
+          const savedFilters = localStorage.getItem(`smartFilters_${parsedMeta.id}`);
+          if (savedFilters) {
+            try {
+              const parsed = JSON.parse(savedFilters);
+              setSmartFilters(parsed.filters || []);
+            } catch (parseError) {
+              console.error('Failed to parse smart filters:', parseError);
+            }
+          }
+          
+          const savedActiveFilters = localStorage.getItem(`activeFilters_${parsedMeta.id}`);
+          if (savedActiveFilters) {
+            try {
+              setActiveFilters(JSON.parse(savedActiveFilters));
+            } catch (parseError) {
+              console.error('Failed to parse active filters:', parseError);
+            }
+          }
         }
-      }
+      };
       
-      // Load active filters
-      const savedActiveFilters = localStorage.getItem(`activeFilters_${parsedMeta.id}`);
-      if (savedActiveFilters) {
-        try {
-          setActiveFilters(JSON.parse(savedActiveFilters));
-        } catch (e) {
-          console.error('Failed to parse active filters:', e);
-        }
-      }
+      loadFilters();
     }
   }, []);
 

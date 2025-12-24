@@ -406,37 +406,79 @@ const SmartFilters: React.FC = () => {
   const [showAddModal, setShowAddModal] = useState(false);
   const [hasGeneratedAI, setHasGeneratedAI] = useState(false);
 
-  // Load saved data from localStorage on mount
+  // Load saved data from database on mount
   useEffect(() => {
     const storedMeta = localStorage.getItem('currentDatasetMeta');
     if (storedMeta) {
       const parsedMeta = JSON.parse(storedMeta);
       setMeta(parsedMeta);
       
-      // Load saved filters (extended format)
-      const savedFilters = localStorage.getItem(`extendedSmartFilters_${parsedMeta.id}`);
-      if (savedFilters) {
+      // Load saved filters from database
+      const loadFilters = async () => {
         try {
-          const parsed = JSON.parse(savedFilters);
-          setFilters(parsed);
-          setHasGeneratedAI(parsed.some((f: ExtendedSmartFilter) => f.source === 'ai'));
+          const result = await apiService.getSmartFilters(parsedMeta.id);
+          if (result && result.filters && result.filters.length > 0) {
+            setFilters(result.filters);
+            setHasGeneratedAI(result.filters.some((f: ExtendedSmartFilter) => f.source === 'ai'));
+          } else {
+            // Fallback: try to load from localStorage (migration support)
+            const savedFilters = localStorage.getItem(`extendedSmartFilters_${parsedMeta.id}`);
+            if (savedFilters) {
+              try {
+                const parsed = JSON.parse(savedFilters);
+                setFilters(parsed);
+                setHasGeneratedAI(parsed.some((f: ExtendedSmartFilter) => f.source === 'ai'));
+                // Migrate to database
+                await apiService.saveSmartFilters(parsedMeta.id, parsed);
+                // Remove from localStorage after migration
+                localStorage.removeItem(`extendedSmartFilters_${parsedMeta.id}`);
+              } catch (e) {
+                console.error('Failed to parse saved filters from localStorage:', e);
+              }
+            }
+          }
         } catch (e) {
-          console.error('Failed to parse saved filters:', e);
+          console.error('Failed to load smart filters from database:', e);
+          // Fallback: try localStorage
+          const savedFilters = localStorage.getItem(`extendedSmartFilters_${parsedMeta.id}`);
+          if (savedFilters) {
+            try {
+              const parsed = JSON.parse(savedFilters);
+              setFilters(parsed);
+              setHasGeneratedAI(parsed.some((f: ExtendedSmartFilter) => f.source === 'ai'));
+            } catch (parseError) {
+              console.error('Failed to parse saved filters:', parseError);
+            }
+          }
         }
-      }
+      };
+      
+      loadFilters();
     }
   }, []);
 
-  // Save filters to localStorage whenever they change
+  // Save filters to database whenever they change (with debouncing)
   useEffect(() => {
-    if (meta?.id) {
-      if (filters.length > 0) {
-        localStorage.setItem(`extendedSmartFilters_${meta.id}`, JSON.stringify(filters));
-      } else {
-        // Remove from localStorage when all filters are deleted
+    if (!meta?.id) return;
+    
+    // Debounce save operations to avoid too many API calls
+    const timeoutId = setTimeout(async () => {
+      try {
+        await apiService.saveSmartFilters(meta.id, filters);
+        // Also remove from localStorage if exists (cleanup)
         localStorage.removeItem(`extendedSmartFilters_${meta.id}`);
+      } catch (e) {
+        console.error('Failed to save smart filters to database:', e);
+        // Fallback: save to localStorage as backup
+        if (filters.length > 0) {
+          localStorage.setItem(`extendedSmartFilters_${meta.id}`, JSON.stringify(filters));
+        } else {
+          localStorage.removeItem(`extendedSmartFilters_${meta.id}`);
+        }
       }
-    }
+    }, 500); // 500ms debounce
+
+    return () => clearTimeout(timeoutId);
   }, [filters, meta?.id]);
 
   const generateAISuggestions = async () => {

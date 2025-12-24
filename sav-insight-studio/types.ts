@@ -186,7 +186,7 @@ export interface SmartFilterResponse {
 
 // ==================== Twin Transformer Types ====================
 
-export type TransformJobStatus = 'idle' | 'running' | 'paused' | 'completed' | 'failed';
+export type TransformJobStatus = 'idle' | 'running' | 'paused' | 'completed' | 'failed' | 'cancelled';
 
 export interface AdminColumn {
   code: string;
