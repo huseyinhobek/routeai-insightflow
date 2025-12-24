@@ -140,10 +140,36 @@ def detect_measure_type(var_type: str, cardinality: int) -> str:
     return 'unknown'
 
 
+def parse_column_header(col_str: str) -> tuple:
+    """
+    Parse column header to extract code and label.
+    Supports multiple formats:
+    - "CODE - Label" (dash separator)
+    - "CODE: Label" (colon separator)
+    - "CODE" (no separator, code = label)
+    
+    Returns (code, label) tuple.
+    """
+    col_str = str(col_str).strip()
+    
+    # Try different separators in order of preference
+    separators = [' - ', ': ', ' : ']
+    
+    for sep in separators:
+        if sep in col_str:
+            parts = col_str.split(sep, 1)
+            code = parts[0].strip()
+            label = parts[1].strip() if len(parts) > 1 else code
+            return code, label
+    
+    # No separator found - use the whole string as both code and label
+    return col_str, col_str
+
+
 class ExcelCsvMeta:
     """
     Mock metadata object for Excel/CSV files to maintain compatibility with SAV processing.
-    Excel/CSV files have labels in column headers (format: "CODE - Label text")
+    Excel/CSV files have labels in column headers (format: "CODE - Label text" or "CODE: Label text")
     and values are already human-readable (not coded).
     """
     def __init__(self, df: pd.DataFrame):
@@ -151,18 +177,9 @@ class ExcelCsvMeta:
         self.column_names_to_labels = {}
         self.missing_ranges = {}
         
-        # Parse column headers: "CODE - Label" or just "CODE"
+        # Parse column headers
         for col in df.columns:
-            col_str = str(col).strip()
-            if ' - ' in col_str:
-                # Format: "AGE_GROUP - Yaş Grubu"
-                parts = col_str.split(' - ', 1)
-                code = parts[0].strip()
-                label = parts[1].strip() if len(parts) > 1 else code
-            else:
-                code = col_str
-                label = col_str
-            
+            code, label = parse_column_header(col)
             self.column_names_to_labels[col] = label
             
             # Build value labels from unique values (for categorical columns)
@@ -209,15 +226,11 @@ def process_excel_csv_file(file_path: Path, original_filename: str) -> dict:
     # Create mock meta object for compatibility
     meta = ExcelCsvMeta(df)
     
-    # Rename columns to use just the CODE part (before " - ")
+    # Rename columns to use just the CODE part
     column_mapping = {}
     for col in df.columns:
-        col_str = str(col).strip()
-        if ' - ' in col_str:
-            code = col_str.split(' - ', 1)[0].strip()
-            column_mapping[col] = code
-        else:
-            column_mapping[col] = col_str
+        code, label = parse_column_header(col)
+        column_mapping[col] = code
     
     # Update meta with new column names
     new_column_names_to_labels = {}
@@ -449,11 +462,8 @@ def load_file_to_dataframe(file_path: Path) -> tuple:
         df.columns = [str(col).strip() for col in df.columns]
         column_mapping = {}
         for col in df.columns:
-            if ' - ' in str(col):
-                code = str(col).split(' - ', 1)[0].strip()
-                column_mapping[col] = code
-            else:
-                column_mapping[col] = str(col)
+            code, _ = parse_column_header(col)
+            column_mapping[col] = code
         df = df.rename(columns=column_mapping)
         meta = ExcelCsvMeta(df)
     elif file_ext in ['.xlsx', '.xls']:
@@ -463,11 +473,8 @@ def load_file_to_dataframe(file_path: Path) -> tuple:
         df.columns = [str(col).strip() for col in df.columns]
         column_mapping = {}
         for col in df.columns:
-            if ' - ' in str(col):
-                code = str(col).split(' - ', 1)[0].strip()
-                column_mapping[col] = code
-            else:
-                column_mapping[col] = str(col)
+            code, _ = parse_column_header(col)
+            column_mapping[col] = code
         df = df.rename(columns=column_mapping)
         meta = ExcelCsvMeta(df)
     else:
