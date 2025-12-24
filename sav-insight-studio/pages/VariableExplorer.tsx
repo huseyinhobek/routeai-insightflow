@@ -223,9 +223,12 @@ const VariableExplorer: React.FC = () => {
                    </div>
                    <div className="h-80 w-full min-w-0">
                      <ResponsiveContainer width="100%" height="100%" minHeight={320}>
-                       <BarChart data={chartData} layout="vertical" margin={{ left: 40, right: 40 }}>
+                       <BarChart data={chartData} layout="vertical" margin={{ left: 40, right: 40, bottom: 30 }}>
                          <CartesianGrid strokeDasharray="3 3" horizontal={true} vertical={false} />
-                         <XAxis type="number" />
+                         <XAxis 
+                           type="number" 
+                           label={{ value: 'Count', position: 'insideBottom', offset: -5, style: { textAnchor: 'middle', fontSize: 12 } }}
+                         />
                          <YAxis 
                            type="category" 
                            dataKey="label" 

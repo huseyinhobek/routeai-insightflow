@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { apiService } from '../services/apiService';
 import { DatasetListItem } from '../types';
+import { useAuth } from '../contexts/AuthContext';
 import { 
   Clock, 
   FileSpreadsheet, 
@@ -13,7 +14,9 @@ import {
   Search,
   CheckCircle,
   AlertTriangle,
-  XCircle
+  XCircle,
+  ArrowLeft,
+  LogOut
 } from 'lucide-react';
 
 const PreviousAnalyses: React.FC = () => {
@@ -22,6 +25,12 @@ const PreviousAnalyses: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
   const navigate = useNavigate();
+  const { user, logout } = useAuth();
+
+  const handleLogout = async () => {
+    await logout();
+    navigate('/login');
+  };
 
   const loadDatasets = async () => {
     setLoading(true);
@@ -56,6 +65,24 @@ const PreviousAnalyses: React.FC = () => {
       await apiService.deleteDataset(id);
       setDatasets(datasets.filter(d => d.id !== id));
       setDeleteConfirm(null);
+      
+      // Clean up all localStorage keys related to this dataset
+      const keysToRemove: string[] = [];
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key && (
+          key.includes(id) || // Any key containing the dataset ID
+          key === 'currentDatasetId' || // Current dataset reference
+          key === 'currentDatasetMeta' // Current dataset metadata
+        )) {
+          keysToRemove.push(key);
+        }
+      }
+      
+      // Remove all identified keys
+      keysToRemove.forEach(key => localStorage.removeItem(key));
+      
+      console.log(`[Delete] Cleaned up ${keysToRemove.length} localStorage keys for dataset ${id}`);
     } catch (err) {
       console.error('Failed to delete dataset:', err);
       alert('Delete operation failed.');
@@ -106,6 +133,38 @@ const PreviousAnalyses: React.FC = () => {
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50 p-8">
       <div className="max-w-6xl mx-auto">
+        {/* Top Bar - Back Button & User Info */}
+        <div className="flex items-center justify-between mb-6">
+          <button
+            onClick={() => navigate('/')}
+            className="flex items-center space-x-2 px-4 py-2 text-gray-600 hover:text-gray-900 hover:bg-white rounded-lg transition-colors"
+          >
+            <ArrowLeft size={20} />
+            <span className="font-medium">Home</span>
+          </button>
+
+          {user && (
+            <div className="flex items-center space-x-4">
+              <div className="flex items-center space-x-3 bg-white px-4 py-2 rounded-lg border border-gray-200">
+                <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white font-semibold text-sm">
+                  {user.name?.charAt(0).toUpperCase() || user.email.charAt(0).toUpperCase()}
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-gray-900">{user.name || 'User'}</p>
+                  <p className="text-xs text-gray-500">{user.email}</p>
+                </div>
+              </div>
+              <button
+                onClick={handleLogout}
+                className="flex items-center space-x-2 px-4 py-2 text-gray-600 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors border border-gray-200 bg-white"
+              >
+                <LogOut size={18} />
+                <span className="font-medium">Sign Out</span>
+              </button>
+            </div>
+          )}
+        </div>
+
         {/* Header */}
         <div className="flex items-center justify-between mb-8">
           <div>

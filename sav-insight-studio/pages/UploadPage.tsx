@@ -1,8 +1,9 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { UploadCloud, FileType, AlertCircle, Loader2, Clock, ChevronRight, BarChart2 } from 'lucide-react';
+import { UploadCloud, FileType, AlertCircle, Loader2, Clock, ChevronRight, BarChart2, LogOut } from 'lucide-react';
 import { apiService } from '../services/apiService';
 import { DatasetListItem } from '../types';
+import { useAuth } from '../contexts/AuthContext';
 
 const UploadPage: React.FC = () => {
   const [isDragging, setIsDragging] = useState(false);
@@ -12,6 +13,12 @@ const UploadPage: React.FC = () => {
   const [loadingRecent, setLoadingRecent] = useState(true);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const navigate = useNavigate();
+  const { user, logout } = useAuth();
+
+  const handleLogout = async () => {
+    await logout();
+    navigate('/login');
+  };
 
   useEffect(() => {
     loadRecentDatasets();
@@ -92,7 +99,31 @@ const UploadPage: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 p-6">
-      <div className="max-w-4xl mx-auto py-12">
+      {/* Top Bar - User Info & Logout */}
+      {user && (
+        <div className="max-w-4xl mx-auto flex justify-end mb-4">
+          <div className="flex items-center space-x-4">
+            <div className="flex items-center space-x-3 bg-white px-4 py-2 rounded-lg border border-gray-200 shadow-sm">
+              <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white font-semibold text-sm">
+                {user.name?.charAt(0).toUpperCase() || user.email.charAt(0).toUpperCase()}
+              </div>
+              <div>
+                <p className="text-sm font-medium text-gray-900">{user.name || 'User'}</p>
+                <p className="text-xs text-gray-500">{user.email}</p>
+              </div>
+            </div>
+            <button
+              onClick={handleLogout}
+              className="flex items-center space-x-2 px-4 py-2 text-gray-600 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors border border-gray-200 bg-white shadow-sm"
+            >
+              <LogOut size={18} />
+              <span className="font-medium">Sign Out</span>
+            </button>
+          </div>
+        </div>
+      )}
+
+      <div className="max-w-4xl mx-auto py-8">
         {/* Header */}
         <div className="text-center mb-12">
           <div className="inline-flex items-center justify-center p-3 bg-gradient-to-br from-blue-600 to-indigo-600 rounded-2xl shadow-lg shadow-blue-200 mb-6">
