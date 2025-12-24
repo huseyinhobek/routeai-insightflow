@@ -140,6 +140,169 @@ def detect_measure_type(var_type: str, cardinality: int) -> str:
     return 'unknown'
 
 
+class ExcelCsvMeta:
+    """
+    Mock metadata object for Excel/CSV files to maintain compatibility with SAV processing.
+    Excel/CSV files have labels in column headers (format: "CODE - Label text")
+    and values are already human-readable (not coded).
+    """
+    def __init__(self, df: pd.DataFrame):
+        self.variable_value_labels = {}  # Excel/CSV has readable values, no code mapping
+        self.column_names_to_labels = {}
+        self.missing_ranges = {}
+        
+        # Parse column headers: "CODE - Label" or just "CODE"
+        for col in df.columns:
+            col_str = str(col).strip()
+            if ' - ' in col_str:
+                # Format: "AGE_GROUP - Yaş Grubu"
+                parts = col_str.split(' - ', 1)
+                code = parts[0].strip()
+                label = parts[1].strip() if len(parts) > 1 else code
+            else:
+                code = col_str
+                label = col_str
+            
+            self.column_names_to_labels[col] = label
+            
+            # Build value labels from unique values (for categorical columns)
+            series = df[col]
+            if series.dtype == 'object' or series.nunique() <= 50:
+                unique_vals = series.dropna().unique()
+                if len(unique_vals) <= 100:  # Only for reasonable cardinality
+                    # Create value labels where value = label (already readable)
+                    value_labels = {}
+                    for i, val in enumerate(unique_vals):
+                        # Use the value itself as both key and label
+                        value_labels[val] = str(val)
+                    self.variable_value_labels[col] = value_labels
+
+
+def process_excel_csv_file(file_path: Path, original_filename: str) -> dict:
+    """
+    Process Excel (.xlsx) or CSV (.csv) file and extract metadata.
+    
+    Expected format:
+    - Column headers: "CODE - Label" or just "CODE"
+    - Values: Human-readable values (not coded), e.g. "35-39" instead of "5"
+    """
+    file_ext = original_filename.lower().split('.')[-1]
+    
+    if file_ext == 'csv':
+        # Try different encodings
+        for encoding in ['utf-8', 'latin-1', 'cp1252', 'iso-8859-9']:
+            try:
+                df = pd.read_csv(str(file_path), encoding=encoding)
+                break
+            except UnicodeDecodeError:
+                continue
+        else:
+            raise ValueError("Could not decode CSV file with any supported encoding")
+    elif file_ext in ['xlsx', 'xls']:
+        df = pd.read_excel(str(file_path))
+    else:
+        raise ValueError(f"Unsupported file format: {file_ext}")
+    
+    # Clean column names - remove leading/trailing whitespace
+    df.columns = [str(col).strip() for col in df.columns]
+    
+    # Create mock meta object for compatibility
+    meta = ExcelCsvMeta(df)
+    
+    # Rename columns to use just the CODE part (before " - ")
+    column_mapping = {}
+    for col in df.columns:
+        col_str = str(col).strip()
+        if ' - ' in col_str:
+            code = col_str.split(' - ', 1)[0].strip()
+            column_mapping[col] = code
+        else:
+            column_mapping[col] = col_str
+    
+    # Update meta with new column names
+    new_column_names_to_labels = {}
+    new_variable_value_labels = {}
+    for old_col, new_col in column_mapping.items():
+        if old_col in meta.column_names_to_labels:
+            new_column_names_to_labels[new_col] = meta.column_names_to_labels[old_col]
+        if old_col in meta.variable_value_labels:
+            new_variable_value_labels[new_col] = meta.variable_value_labels[old_col]
+    
+    meta.column_names_to_labels = new_column_names_to_labels
+    meta.variable_value_labels = new_variable_value_labels
+    
+    # Rename dataframe columns
+    df = df.rename(columns=column_mapping)
+    
+    variables = []
+    
+    for col in df.columns:
+        series = df[col]
+        value_labels = meta.variable_value_labels.get(col, {})
+        variable_label = meta.column_names_to_labels.get(col, col)
+        
+        var_type = detect_variable_type(series, value_labels)
+        cardinality = series.nunique()
+        measure = detect_measure_type(var_type, cardinality)
+        
+        value_labels_list = [{"value": k, "label": v} for k, v in value_labels.items()]
+        
+        total = len(series)
+        non_missing = series.notna().sum()
+        # Also count empty strings as missing for text columns
+        if series.dtype == 'object':
+            non_missing = series.apply(lambda x: pd.notna(x) and str(x).strip() != '').sum()
+        response_rate = (non_missing / total * 100) if total > 0 else 0
+        
+        variables.append({
+            "code": col,
+            "label": variable_label,
+            "type": var_type,
+            "measure": measure,
+            "valueLabels": value_labels_list,
+            "missingValues": None,
+            "cardinality": int(cardinality),
+            "responseCount": int(non_missing),
+            "responseRate": round(response_rate, 2)
+        })
+    
+    # Run quality analysis
+    analyzer = QualityAnalyzer(df, meta, variables)
+    quality_report = analyzer.analyze()
+    quality_dict = asdict(quality_report)
+    
+    dataset_id = str(uuid.uuid4())
+    
+    result_info = {
+        "id": dataset_id,
+        "filename": file_path.name,
+        "original_filename": original_filename,
+        "file_path": str(file_path),
+        "file_type": file_ext,  # Track file type for later reading
+        "nRows": len(df),
+        "nCols": len(df.columns),
+        "createdAt": datetime.now().isoformat(),
+        "variables": variables,
+        "qualityReport": quality_dict,
+        "overallCompletionRate": quality_dict["completeness_score"],
+        "dataQualityScore": quality_dict["overall_score"],
+        "digitalTwinReadiness": quality_dict["digital_twin_readiness"]
+    }
+    
+    # Cache dataframe and info
+    if len(_dataframe_cache) >= _MAX_CACHE_SIZE:
+        oldest_key = next(iter(_dataframe_cache))
+        del _dataframe_cache[oldest_key]
+    
+    _dataframe_cache[dataset_id] = {
+        "df": df,
+        "meta": meta,
+        "info": result_info
+    }
+    
+    return result_info
+
+
 def process_sav_file(file_path: Path, original_filename: str) -> dict:
     """Process SAV file and extract metadata with quality analysis"""
     df, meta = pyreadstat.read_sav(str(file_path))
@@ -262,6 +425,57 @@ def save_to_database(db: Session, dataset_info: dict) -> Dataset:
         return None
 
 
+def load_file_to_dataframe(file_path: Path) -> tuple:
+    """
+    Load a data file (SAV, Excel, or CSV) into a DataFrame.
+    Returns (df, meta) tuple.
+    """
+    file_ext = file_path.suffix.lower()
+    
+    if file_ext == '.sav':
+        df, meta = pyreadstat.read_sav(str(file_path))
+    elif file_ext == '.csv':
+        # Try different encodings
+        for encoding in ['utf-8', 'latin-1', 'cp1252', 'iso-8859-9']:
+            try:
+                df = pd.read_csv(str(file_path), encoding=encoding)
+                break
+            except UnicodeDecodeError:
+                continue
+        else:
+            raise ValueError("Could not decode CSV file")
+        
+        # Create mock meta and process columns
+        df.columns = [str(col).strip() for col in df.columns]
+        column_mapping = {}
+        for col in df.columns:
+            if ' - ' in str(col):
+                code = str(col).split(' - ', 1)[0].strip()
+                column_mapping[col] = code
+            else:
+                column_mapping[col] = str(col)
+        df = df.rename(columns=column_mapping)
+        meta = ExcelCsvMeta(df)
+    elif file_ext in ['.xlsx', '.xls']:
+        df = pd.read_excel(str(file_path))
+        
+        # Create mock meta and process columns
+        df.columns = [str(col).strip() for col in df.columns]
+        column_mapping = {}
+        for col in df.columns:
+            if ' - ' in str(col):
+                code = str(col).split(' - ', 1)[0].strip()
+                column_mapping[col] = code
+            else:
+                column_mapping[col] = str(col)
+        df = df.rename(columns=column_mapping)
+        meta = ExcelCsvMeta(df)
+    else:
+        raise ValueError(f"Unsupported file format: {file_ext}")
+    
+    return df, meta
+
+
 def get_dataframe(dataset_id: str, db: Session = None) -> tuple:
     """Get dataframe from cache or re-read from file"""
     # Check cache first
@@ -280,7 +494,7 @@ def get_dataframe(dataset_id: str, db: Session = None) -> tuple:
             
             if file_path.exists():
                 try:
-                    df, meta = pyreadstat.read_sav(str(file_path))
+                    df, meta = load_file_to_dataframe(file_path)
                     # Cache with size limit (simple FIFO eviction)
                     if len(_dataframe_cache) >= _MAX_CACHE_SIZE:
                         # Remove oldest entry (simple FIFO)
@@ -479,6 +693,9 @@ from services.export_policy import check_export_permission
 
 # ==================== API ENDPOINTS ====================
 
+SUPPORTED_EXTENSIONS = ['.sav', '.xlsx', '.xls', '.csv']
+
+
 @app.post("/api/datasets/upload")
 async def upload_dataset(
     request: Request,
@@ -486,15 +703,21 @@ async def upload_dataset(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user_optional),
 ):
-    """Upload and process a SAV file"""
+    """Upload and process a SAV, Excel, or CSV file"""
     # Validate filename
     if not file.filename:
         raise HTTPException(status_code=400, detail="Filename is required")
     
-    if not file.filename.lower().endswith('.sav'):
-        raise HTTPException(status_code=400, detail="Only .sav files are supported")
+    # Check file extension
+    file_ext = '.' + file.filename.lower().split('.')[-1] if '.' in file.filename else ''
+    if file_ext not in SUPPORTED_EXTENSIONS:
+        raise HTTPException(
+            status_code=400, 
+            detail=f"Unsupported file format. Supported formats: {', '.join(SUPPORTED_EXTENSIONS)}"
+        )
     
-    file_path = UPLOAD_DIR / f"{uuid.uuid4()}.sav"
+    # Generate unique filename with correct extension
+    file_path = UPLOAD_DIR / f"{uuid.uuid4()}{file_ext}"
     
     try:
         # Read file content
@@ -508,17 +731,21 @@ async def upload_dataset(
         with open(file_path, "wb") as f:
             f.write(content)
         
-        # Process SAV file
+        # Process file based on type
         try:
-            dataset_info = process_sav_file(file_path, file.filename)
+            if file_ext == '.sav':
+                dataset_info = process_sav_file(file_path, file.filename)
+            else:
+                # Excel or CSV
+                dataset_info = process_excel_csv_file(file_path, file.filename)
         except Exception as parse_error:
             import traceback
             error_trace = traceback.format_exc()
-            print(f"[ERROR] Failed to parse SAV file: {str(parse_error)}")
+            print(f"[ERROR] Failed to parse {file_ext} file: {str(parse_error)}")
             print(f"[ERROR] Traceback: {error_trace}")
             raise HTTPException(
                 status_code=500, 
-                detail=f"Failed to parse SAV file: {str(parse_error)}"
+                detail=f"Failed to parse file: {str(parse_error)}"
             )
         
         # Add org_id and created_by if user is authenticated

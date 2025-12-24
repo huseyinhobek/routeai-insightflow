@@ -35,9 +35,14 @@ const UploadPage: React.FC = () => {
     }
   };
 
+  const SUPPORTED_EXTENSIONS = ['.sav', '.xlsx', '.xls', '.csv'];
+  
   const handleFile = async (file: File) => {
-    if (!file.name.toLowerCase().endsWith('.sav')) {
-      setError('Please upload a valid SPSS (.sav) file.');
+    const fileName = file.name.toLowerCase();
+    const hasValidExtension = SUPPORTED_EXTENSIONS.some(ext => fileName.endsWith(ext));
+    
+    if (!hasValidExtension) {
+      setError(`Please upload a valid file. Supported formats: ${SUPPORTED_EXTENSIONS.join(', ')}`);
       return;
     }
 
@@ -133,7 +138,7 @@ const UploadPage: React.FC = () => {
             SAV Insight Studio
           </h1>
           <p className="text-lg text-gray-500 max-w-xl mx-auto">
-            Analyze your SPSS datasets, measure data quality, and evaluate digital twin readiness.
+            Analyze your survey datasets (SPSS, Excel, CSV), measure data quality, and evaluate digital twin readiness.
           </p>
         </div>
 
@@ -157,7 +162,7 @@ const UploadPage: React.FC = () => {
             type="file"
             ref={fileInputRef}
             className="hidden"
-            accept=".sav"
+            accept=".sav,.xlsx,.xls,.csv"
             onChange={(e) => e.target.files?.[0] && handleFile(e.target.files[0])}
           />
 
@@ -170,10 +175,10 @@ const UploadPage: React.FC = () => {
           </div>
 
           <h3 className="text-xl font-semibold text-gray-900 mb-2">
-            {isLoading ? 'Analyzing File...' : 'Click or drag a .sav file here'}
+            {isLoading ? 'Analyzing File...' : 'Click or drag a file here'}
           </h3>
           <p className="text-sm text-gray-500 max-w-sm mx-auto">
-            Supported format: SPSS Statistics Data Document (.sav). 
+            Supported formats: SPSS (.sav), Excel (.xlsx, .xls), CSV (.csv). 
             Recommended maximum size: 100MB.
           </p>
 
