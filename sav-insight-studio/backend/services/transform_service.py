@@ -371,7 +371,12 @@ class TransformService:
         self, 
         variables: List[Dict[str, Any]]
     ) -> List[Dict[str, Any]]:
-        """Detect potential exclude candidates in value labels"""
+        """
+        Detect potential exclude candidates in value labels.
+        
+        Works for both SAV files (where value labels map codes to labels)
+        and Excel/CSV files (where values are already human-readable text).
+        """
         candidates = {}
         
         for pattern_key, pattern_info in EXCLUDE_PATTERNS.items():
@@ -390,16 +395,28 @@ class TransformService:
                 value = vl.get("value")
                 label = vl.get("label", "").lower()
                 
+                # For Excel/CSV, value itself might be the human-readable text
+                # So we also check if value (as string) matches patterns
+                value_str = str(value).lower() if value is not None else ""
+                
                 for pattern_key, pattern_info in EXCLUDE_PATTERNS.items():
                     matched = False
                     
-                    # Check label patterns
+                    # Check label patterns (SAV format)
                     for regex in pattern_info["patterns"]:
                         if re.search(regex, label, re.IGNORECASE):
                             matched = True
                             break
                     
-                    # Check value patterns
+                    # Check value as text patterns (Excel/CSV format)
+                    # In Excel/CSV, the value itself is the readable text
+                    if not matched and value_str:
+                        for regex in pattern_info["patterns"]:
+                            if re.search(regex, value_str, re.IGNORECASE):
+                                matched = True
+                                break
+                    
+                    # Check numeric value patterns (SAV format - coded values like 99, 999)
                     if not matched and value in pattern_info["values"]:
                         matched = True
                     

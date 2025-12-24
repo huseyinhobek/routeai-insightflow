@@ -587,8 +587,31 @@ const SmartFilters: React.FC = () => {
   };
 
   const appliedCount = filters.filter(f => f.isApplied).length;
-  const aiFilters = filters.filter(f => f.source === 'ai');
-  const manualFilters = filters.filter(f => f.source === 'manual');
+  
+  // Create a map of variable code to its index in the dataset for sorting
+  const varIndexMap = useMemo(() => {
+    const map = new Map<string, number>();
+    if (meta?.variables) {
+      meta.variables.forEach((v, index) => {
+        map.set(v.code, index);
+      });
+    }
+    return map;
+  }, [meta?.variables]);
+  
+  // Sort filters by dataset variable order (based on first sourceVar)
+  const sortByDatasetOrder = (filterList: ExtendedSmartFilter[]) => {
+    return [...filterList].sort((a, b) => {
+      const aVar = a.sourceVars?.[0];
+      const bVar = b.sourceVars?.[0];
+      const aIndex = aVar ? (varIndexMap.get(aVar) ?? Number.MAX_SAFE_INTEGER) : Number.MAX_SAFE_INTEGER;
+      const bIndex = bVar ? (varIndexMap.get(bVar) ?? Number.MAX_SAFE_INTEGER) : Number.MAX_SAFE_INTEGER;
+      return aIndex - bIndex;
+    });
+  };
+  
+  const aiFilters = sortByDatasetOrder(filters.filter(f => f.source === 'ai'));
+  const manualFilters = sortByDatasetOrder(filters.filter(f => f.source === 'manual'));
   const existingFilterVars = filters.flatMap(f => f.sourceVars);
   const aiFilterVars = aiFilters.flatMap(f => f.sourceVars); // Variables used by AI filters
 
