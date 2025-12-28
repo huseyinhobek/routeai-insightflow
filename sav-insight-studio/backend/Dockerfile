@@ -17,7 +17,12 @@ COPY main.py .
 COPY config.py .
 COPY database.py .
 COPY models.py .
+COPY celery_app.py .
 COPY services/ ./services/
+COPY routers/ ./routers/
+COPY auth/ ./auth/
+COPY middleware/ ./middleware/
+COPY tasks/ ./tasks/
 COPY uploads/ ./uploads/
 
 # Create upload directory

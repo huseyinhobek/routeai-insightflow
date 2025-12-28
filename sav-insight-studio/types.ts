@@ -65,6 +65,7 @@ export interface DatasetListItem {
 export interface DatasetRow {
   index: number;
   data: Record<string, any>;
+  labeled?: Record<string, any>;
 }
 
 export interface DatasetRowsResponse {

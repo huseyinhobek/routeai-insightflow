@@ -63,6 +63,8 @@ const PreviousAnalyses: React.FC = () => {
   const handleDelete = async (id: string) => {
     try {
       await apiService.deleteDataset(id);
+      
+      // Remove from UI list
       setDatasets(datasets.filter(d => d.id !== id));
       setDeleteConfirm(null);
       
@@ -72,8 +74,8 @@ const PreviousAnalyses: React.FC = () => {
         const key = localStorage.key(i);
         if (key && (
           key.includes(id) || // Any key containing the dataset ID
-          key === 'currentDatasetId' || // Current dataset reference
-          key === 'currentDatasetMeta' // Current dataset metadata
+          (key === 'currentDatasetId' && localStorage.getItem(key) === id) || // Current dataset reference
+          (key === 'currentDatasetMeta' && JSON.parse(localStorage.getItem(key) || '{}').id === id) // Current dataset metadata
         )) {
           keysToRemove.push(key);
         }
@@ -82,10 +84,19 @@ const PreviousAnalyses: React.FC = () => {
       // Remove all identified keys
       keysToRemove.forEach(key => localStorage.removeItem(key));
       
-      console.log(`[Delete] Cleaned up ${keysToRemove.length} localStorage keys for dataset ${id}`);
-    } catch (err) {
+      // If deleted dataset was the current one, redirect to home
+      const currentDatasetId = localStorage.getItem('currentDatasetId');
+      if (currentDatasetId === id) {
+        localStorage.removeItem('currentDatasetId');
+        localStorage.removeItem('currentDatasetMeta');
+        navigate('/');
+      }
+      
+      console.log(`[Delete] Successfully deleted dataset ${id} and cleaned up ${keysToRemove.length} localStorage keys`);
+    } catch (err: any) {
       console.error('Failed to delete dataset:', err);
-      alert('Delete operation failed.');
+      const errorMessage = err?.message || err?.response?.data?.detail || 'Delete operation failed.';
+      alert(`Silme işlemi başarısız: ${errorMessage}`);
     }
   };
 

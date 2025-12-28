@@ -54,8 +54,8 @@ export function setCsrfToken(token: string): void {
   csrfToken = token;
 }
 
-// Fetch wrapper with credentials and CSRF
-async function authFetch(url: string, options: RequestInit = {}): Promise<Response> {
+// Fetch wrapper with credentials and CSRF, with timeout
+async function authFetch(url: string, options: RequestInit = {}, timeoutMs: number = 10000): Promise<Response> {
   const headers = new Headers(options.headers);
   
   // Add CSRF token for non-GET requests
@@ -71,11 +71,26 @@ async function authFetch(url: string, options: RequestInit = {}): Promise<Respon
     headers.set('Content-Type', 'application/json');
   }
   
-  return fetch(url, {
-    ...options,
-    headers,
-    credentials: 'include', // Include cookies
-  });
+  // Create AbortController for timeout
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+  
+  try {
+    const response = await fetch(url, {
+      ...options,
+      headers,
+      credentials: 'include', // Include cookies
+      signal: controller.signal,
+    });
+    clearTimeout(timeoutId);
+    return response;
+  } catch (error: any) {
+    clearTimeout(timeoutId);
+    if (error.name === 'AbortError') {
+      throw new Error(`Request timeout: ${url}`);
+    }
+    throw error;
+  }
 }
 
 class AuthService {
@@ -150,19 +165,21 @@ class AuthService {
    */
   async getCurrentUser(): Promise<AuthUser | null> {
     try {
-      const response = await authFetch(`${API_BASE_URL}/auth/me`);
+      const response = await authFetch(`${API_BASE_URL}/auth/me`, {}, 5000); // 5 second timeout for /me
       
       if (response.status === 401) {
         return null;
       }
       
       if (!response.ok) {
-        throw new Error('Failed to get user');
+        console.error(`getCurrentUser failed with status ${response.status}`);
+        return null;
       }
       
       return response.json();
-    } catch (error) {
-      console.error('getCurrentUser error:', error);
+    } catch (error: any) {
+      console.error('getCurrentUser error:', error.message || error);
+      // Return null instead of throwing - this allows unauthenticated users to continue
       return null;
     }
   }

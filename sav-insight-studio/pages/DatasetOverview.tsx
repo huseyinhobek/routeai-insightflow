@@ -1,12 +1,15 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { DatasetMeta } from '../types';
-import { Users, LayoutGrid, CheckCircle, AlertTriangle } from 'lucide-react';
+import { Users, LayoutGrid, CheckCircle, AlertTriangle, Sparkles, Loader2 } from 'lucide-react';
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, BarChart, Bar, XAxis, YAxis } from 'recharts';
 import { COLORS } from '../constants';
+import { apiService } from '../services/apiService';
 
 const DatasetOverview: React.FC = () => {
   const [meta, setMeta] = useState<DatasetMeta | null>(null);
+  const [generating, setGenerating] = useState(false);
+  const [generateStatus, setGenerateStatus] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -37,6 +40,64 @@ const DatasetOverview: React.FC = () => {
     .sort((a, b) => a.responseRate - b.responseRate)
     .slice(0, 5);
 
+  const handleGenerateEmbeddings = async () => {
+    if (!meta) return;
+    
+    setGenerating(true);
+    setGenerateStatus(null);
+    
+    try {
+      // First, populate dataset data if needed (this can take several minutes for large datasets)
+      // We'll start it but don't wait for completion in the UI - it will run in background
+      setGenerateStatus({
+        type: 'success',
+        message: 'Populating dataset data (this may take a few minutes for large datasets)...'
+      });
+      
+      // Start populate in background - don't await (fire and forget for now)
+      // In production, this should be a background job
+      apiService.populateDatasetData(meta.id)
+        .then(() => {
+          setGenerateStatus({
+            type: 'success',
+            message: 'Dataset data populated. Generating embeddings...'
+          });
+          // After populate completes, generate embeddings
+          return apiService.generateEmbeddings(meta.id);
+        })
+        .then((result) => {
+          const varCount = result.variable_embeddings?.embeddings || 0;
+          const uttCount = result.utterance_embeddings?.embeddings || 0;
+          
+          setGenerateStatus({
+            type: 'success',
+            message: `Embeddings generated successfully! Variables: ${varCount}, Utterances: ${uttCount}`
+          });
+          
+          // Clear status message after 5 seconds
+          setTimeout(() => setGenerateStatus(null), 5000);
+          setGenerating(false);
+        })
+        .catch((error: any) => {
+          console.error('Error in populate/generate process:', error);
+          setGenerateStatus({
+            type: 'error',
+            message: error.message || 'Failed to populate data or generate embeddings. Please check backend logs.'
+          });
+          setGenerating(false);
+        });
+      
+      // Don't set generating to false here - let the promise chain handle it
+      
+    } catch (error: any) {
+      setGenerateStatus({
+        type: 'error',
+        message: error.message || 'Failed to start embedding generation'
+      });
+      setGenerating(false);
+    }
+  };
+
   const StatCard = ({ title, value, icon, color }: any) => (
     <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 flex items-start justify-between">
       <div>
@@ -51,10 +112,54 @@ const DatasetOverview: React.FC = () => {
 
   return (
     <div className="space-y-8">
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900">{meta.filename}</h1>
-        <p className="text-gray-500">Dataset Overview</p>
+      <div className="flex items-start justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">{meta.filename}</h1>
+          <p className="text-gray-500">Dataset Overview</p>
+        </div>
+        <button
+          onClick={handleGenerateEmbeddings}
+          disabled={generating}
+          className={`
+            flex items-center gap-2 px-4 py-2 rounded-xl font-medium text-sm transition-all
+            ${generating 
+              ? 'bg-gray-100 text-gray-400 cursor-not-allowed' 
+              : 'bg-purple-600 text-white hover:bg-purple-700 shadow-sm hover:shadow-md'
+            }
+          `}
+        >
+          {generating ? (
+            <>
+              <Loader2 size={16} className="animate-spin" />
+              <span>Generating...</span>
+            </>
+          ) : (
+            <>
+              <Sparkles size={16} />
+              <span>Generate Embeddings</span>
+            </>
+          )}
+        </button>
       </div>
+
+      {generateStatus && (
+        <div className={`
+          p-4 rounded-xl border
+          ${generateStatus.type === 'success' 
+            ? 'bg-green-50 border-green-200 text-green-800' 
+            : 'bg-red-50 border-red-200 text-red-800'
+          }
+        `}>
+          <div className="flex items-center gap-2">
+            {generateStatus.type === 'success' ? (
+              <CheckCircle size={20} />
+            ) : (
+              <AlertTriangle size={20} />
+            )}
+            <span className="text-sm font-medium">{generateStatus.message}</span>
+          </div>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <StatCard 

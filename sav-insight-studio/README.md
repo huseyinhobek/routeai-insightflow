@@ -15,6 +15,22 @@
 
 ---
 
+## 🧪 Research Workflow
+
+The platform includes a comprehensive Research Workflow system with structured and RAG-based question answering:
+
+- **Structured Mode**: Deterministic SQL aggregation for direct survey questions
+- **RAG Mode**: Semantic retrieval over utterances for questions not directly in survey
+- **Evidence Contract**: Every answer includes evidence JSON with provenance
+- **Guardrails**: Number validation, quantifier policy, template compliance
+- **Dataset Versioning**: Thread results remain consistent across dataset updates
+- **Audience Membership**: Atomic swap versioning for scalable segmentation
+- **Mapping Debug JSON**: Transparent variable mapping rationale
+
+See [Research Workflow Documentation](#research-workflow) for details.
+
+---
+
 ## ✨ Features
 
 <table>
@@ -261,6 +277,53 @@ Transform survey response data into AI-ready digital twin format.
 |--------|----------|-------------|
 | `GET` | `/health` | Health check |
 | `GET` | `/api/config` | Configuration status |
+
+---
+
+## 🧪 Research Workflow
+
+### Structured vs RAG Mode
+
+The system uses two modes for answering questions:
+
+- **Structured Mode (Mode A)**: For questions directly answerable from survey variables. Uses deterministic SQL aggregation to compute counts, percentages, and statistics. The LLM only narrates the evidence provided.
+
+- **RAG Mode (Mode B)**: For questions not directly in the survey structure. Uses semantic retrieval over utterances (respondent-level natural language sentences) to find relevant quotes and themes.
+
+### Evidence Contract
+
+Every answer includes:
+- **Evidence JSON**: Base sample size (base_n), answered count (answered_n), response rate, missing count, categories with counts/percentages, or retrieved citations
+- **Provenance**: Variable codes, respondent IDs, question texts
+- **Mapping Debug JSON**: Variable mapping rationale, candidate scores, chosen variable, reason for mode selection
+
+### Guardrails
+
+The system includes strict guardrails to prevent hallucinations:
+- **Number Validation**: All numbers mentioned in narratives must exist in evidence JSON
+- **Quantifier Policy**: Phrases like "majority" (>50%), "overwhelming majority" (>75%), "nearly all" (>90%) are validated against evidence percentages
+- **Template Compliance**: LLM output uses restricted JSON templates, not free-form text
+- **Quote Validation**: In RAG mode, all quotes must exist in citations with respondent IDs
+
+### Dataset Versioning
+
+Dataset versions increment on upload/merge. Thread results store the dataset version they were created with, ensuring consistency even when datasets are updated. Cache keys include dataset version for automatic invalidation.
+
+### Audience Membership Materialization
+
+Audiences use an atomic swap versioning system for membership:
+- Membership is stored in `audience_members` table with version numbers
+- Active version is tracked in `audience.active_membership_version`
+- Queries JOIN with active version for fast, scalable filtering (avoids expensive IN subqueries)
+- New versions are created atomically, old versions cleaned up asynchronously
+
+### Mapping Debug JSON
+
+Each thread result includes `mapping_debug_json` with:
+- Candidate variables with scores (semantic, lexical, value label coverage, question family heuristics)
+- Chosen variable and rationale
+- Threshold used (varies by variable type: demographic 0.80, single-choice 0.75, etc.)
+- Mode selection reason
 
 ---
 

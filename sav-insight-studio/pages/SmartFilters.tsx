@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { apiService } from '../services/apiService';
 import { DatasetMeta, SmartFilterResponse, SmartFilter, VariableSummary, FilterType, FilterControl } from '../types';
-import { Sparkles, Sliders, Check, AlertCircle, RefreshCw, Plus, X, Search, Bot, User, ChevronDown, ChevronUp, Filter } from 'lucide-react';
+import { Sparkles, Sliders, Check, AlertCircle, RefreshCw, Plus, X, Search, Bot, User, ChevronDown, ChevronUp, Filter, Users, Save } from 'lucide-react';
 
 // Extended SmartFilter with source tracking
 interface ExtendedSmartFilter extends SmartFilter {
@@ -276,14 +277,52 @@ const AddFilterModal: React.FC<AddFilterModalProps> = ({
   );
 };
 
+// Convert Smart Filter to filter_json format for audience
+const convertFilterToFilterJson = (filter: ExtendedSmartFilter, selectedValues?: string[]): any => {
+  // filter_json format: {"variable_code": {"operator": "in", "values": [...]}}
+  // Smart filters have sourceVars array and options array
+  
+  if (!filter.sourceVars || filter.sourceVars.length === 0) {
+    return {};
+  }
+  
+  // Use the first source variable (smart filters typically have one variable)
+  const varCode = filter.sourceVars[0];
+  
+  // For categorical/multi-select filters, extract values from options
+  if (filter.filterType === 'categorical' || filter.filterType === 'multi_select' || filter.filterType === 'ordinal') {
+    // Use selectedValues if provided, otherwise use all option keys (fallback)
+    const values = selectedValues && selectedValues.length > 0 
+      ? selectedValues 
+      : (filter.options?.map(opt => opt.key) || []);
+    
+    if (values.length === 0) {
+      return {};
+    }
+    
+    return {
+      [varCode]: {
+        operator: "in",
+        values: values
+      }
+    };
+  }
+  
+  // For numeric_range, we'd need min/max values - not fully supported yet
+  // For now, return empty object
+  return {};
+};
+
 // Filter Card Component
 interface FilterCardProps {
   filter: ExtendedSmartFilter;
   onToggleApply: (id: string) => void;
   onRemove: (id: string) => void;
+  onSaveAsAudience?: (filter: ExtendedSmartFilter) => void;
+  datasetId?: string;
 }
 
-const FilterCard: React.FC<FilterCardProps> = ({ filter, onToggleApply, onRemove }) => {
+const FilterCard: React.FC<FilterCardProps> = ({ filter, onToggleApply, onRemove, onSaveAsAudience, datasetId }) => {
   const [isExpanded, setIsExpanded] = useState(false);
 
   return (
@@ -377,7 +416,7 @@ const FilterCard: React.FC<FilterCardProps> = ({ filter, onToggleApply, onRemove
       )}
 
       {/* Action Buttons */}
-      <div className="flex items-center justify-between pt-3 border-t border-gray-100">
+      <div className="flex items-center justify-between pt-3 border-t border-gray-100 gap-2">
         <button 
           onClick={() => onToggleApply(filter.id)}
           className={`
@@ -393,18 +432,31 @@ const FilterCard: React.FC<FilterCardProps> = ({ filter, onToggleApply, onRemove
             <><Sliders size={16} /> <span>Apply Filter</span></>
           )}
         </button>
+        {onSaveAsAudience && datasetId && (filter.filterType === 'categorical' || filter.filterType === 'multi_select' || filter.filterType === 'ordinal') && (
+          <button
+            onClick={() => onSaveAsAudience(filter)}
+            className="flex items-center space-x-2 text-sm font-medium px-4 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition-all"
+            title="Save as Audience"
+          >
+            <Save size={16} />
+            <span>Save as Audience</span>
+          </button>
+        )}
       </div>
     </div>
   );
 };
 
 const SmartFilters: React.FC = () => {
+  const navigate = useNavigate();
   const [meta, setMeta] = useState<DatasetMeta | null>(null);
   const [filters, setFilters] = useState<ExtendedSmartFilter[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showAddModal, setShowAddModal] = useState(false);
   const [hasGeneratedAI, setHasGeneratedAI] = useState(false);
+  const [showSaveAsAudienceModal, setShowSaveAsAudienceModal] = useState(false);
+  const [selectedFilterForAudience, setSelectedFilterForAudience] = useState<ExtendedSmartFilter | null>(null);
 
   // Load saved data from database on mount
   useEffect(() => {
@@ -615,6 +667,40 @@ const SmartFilters: React.FC = () => {
   const existingFilterVars = filters.flatMap(f => f.sourceVars);
   const aiFilterVars = aiFilters.flatMap(f => f.sourceVars); // Variables used by AI filters
 
+  const handleSaveAsAudience = (filter: ExtendedSmartFilter) => {
+    setSelectedFilterForAudience(filter);
+    setShowSaveAsAudienceModal(true);
+  };
+
+  const handleCreateAudience = async (name: string, description: string, selectedValues?: string[]) => {
+    if (!meta || !selectedFilterForAudience) return;
+    
+    try {
+      const filter_json = convertFilterToFilterJson(selectedFilterForAudience, selectedValues);
+      
+      if (Object.keys(filter_json).length === 0) {
+        alert('Bu filtre türü için audience oluşturulamaz. Sadece categorical, multi_select veya ordinal filtreler desteklenir.');
+        return;
+      }
+      
+      await apiService.createAudience({
+        dataset_id: meta.id,
+        name: name || selectedFilterForAudience.title,
+        description: description || selectedFilterForAudience.description,
+        filter_json: filter_json
+      });
+      
+      setShowSaveAsAudienceModal(false);
+      setSelectedFilterForAudience(null);
+      
+      // Navigate to audiences page
+      navigate('/audiences');
+    } catch (err: any) {
+      alert('Audience oluşturulurken hata: ' + (err.message || 'Bilinmeyen hata'));
+      console.error('Error creating audience:', err);
+    }
+  };
+
   return (
     <div className="max-w-6xl mx-auto pb-24">
       {/* Header */}
@@ -773,6 +859,8 @@ const SmartFilters: React.FC = () => {
                     filter={filter}
                     onToggleApply={toggleFilterApply}
                     onRemove={removeFilter}
+                    onSaveAsAudience={handleSaveAsAudience}
+                    datasetId={meta?.id}
                   />
                   ))}
                 </div>
@@ -793,6 +881,8 @@ const SmartFilters: React.FC = () => {
                     filter={filter}
                     onToggleApply={toggleFilterApply}
                     onRemove={removeFilter}
+                    onSaveAsAudience={handleSaveAsAudience}
+                    datasetId={meta?.id}
                   />
                 ))}
               </div>
@@ -836,6 +926,196 @@ const SmartFilters: React.FC = () => {
         existingFilterVars={existingFilterVars}
         aiFilterVars={aiFilterVars}
       />
+
+      {/* Save as Audience Modal */}
+      {showSaveAsAudienceModal && selectedFilterForAudience && (
+        <SaveAsAudienceModal
+          filter={selectedFilterForAudience}
+          onClose={() => {
+            setShowSaveAsAudienceModal(false);
+            setSelectedFilterForAudience(null);
+          }}
+          onCreate={handleCreateAudience}
+        />
+      )}
+    </div>
+  );
+};
+
+// Save as Audience Modal Component
+interface SaveAsAudienceModalProps {
+  filter: ExtendedSmartFilter;
+  onClose: () => void;
+  onCreate: (name: string, description: string, selectedValues?: string[]) => void;
+}
+
+const SaveAsAudienceModal: React.FC<SaveAsAudienceModalProps> = ({ filter, onClose, onCreate }) => {
+  const [name, setName] = useState(filter.title);
+  const [description, setDescription] = useState(filter.description || '');
+  const [selectedValues, setSelectedValues] = useState<Set<string>>(new Set());
+
+  // Initialize selected values - if filter has recommendedDefault or isApplied, use those
+  // Otherwise, user will need to select manually
+  React.useEffect(() => {
+    if (filter.options && filter.options.length > 0) {
+      // For now, start with all options selected (user can deselect)
+      // In future, could use filter.recommendedDefault or filter.isApplied state
+      setSelectedValues(new Set(filter.options.map(opt => opt.key)));
+    }
+  }, [filter]);
+
+  const toggleValueSelection = (valueKey: string) => {
+    setSelectedValues(prev => {
+      const next = new Set(prev);
+      if (next.has(valueKey)) {
+        next.delete(valueKey);
+      } else {
+        next.add(valueKey);
+      }
+      return next;
+    });
+  };
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (selectedValues.size === 0) {
+      alert('Lütfen en az bir değer seçin');
+      return;
+    }
+    // Pass selected values to onCreate
+    onCreate(name, description, Array.from(selectedValues));
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+      <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md">
+        <div className="px-6 py-5 border-b border-gray-100">
+          <div className="flex justify-between items-center">
+            <div>
+              <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2">
+                <Users className="text-blue-500" size={20} />
+                Save as Audience
+              </h2>
+              <p className="text-gray-500 text-sm mt-1">Create an audience from this filter</p>
+            </div>
+            <button 
+              onClick={onClose}
+              className="p-2 hover:bg-gray-100 rounded-xl transition-colors"
+            >
+              <X size={20} className="text-gray-500" />
+            </button>
+          </div>
+        </div>
+
+        <form onSubmit={handleSubmit} className="px-6 py-4">
+          <div className="mb-4">
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Filter Info
+            </label>
+            <div className="bg-gray-50 p-3 rounded-lg text-sm">
+              <p className="font-medium text-gray-900">{filter.title}</p>
+              <p className="text-gray-600 mt-1">{filter.description}</p>
+              <div className="mt-2 flex flex-wrap gap-1">
+                {filter.sourceVars.map(v => (
+                  <span key={v} className="bg-white px-2 py-1 rounded text-xs font-mono text-gray-700 border">
+                    {v}
+                  </span>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          <div className="mb-4">
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Audience Name *
+            </label>
+            <input
+              type="text"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              required
+              className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              placeholder="Enter audience name"
+            />
+          </div>
+
+          <div className="mb-4">
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Description (optional)
+            </label>
+            <textarea
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              rows={3}
+              className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
+              placeholder="Enter description"
+            />
+          </div>
+
+          {/* Value Selection */}
+          {filter.options && filter.options.length > 0 && (
+            <div className="mb-6">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Seçilecek Değerler * <span className="text-gray-500 text-xs">({selectedValues.size} seçili)</span>
+              </label>
+              <div className="max-h-60 overflow-y-auto border border-gray-200 rounded-xl p-3 bg-gray-50">
+                <div className="space-y-2">
+                  {filter.options.map((opt) => {
+                    const isSelected = selectedValues.has(opt.key);
+                    return (
+                      <div
+                        key={opt.key}
+                        onClick={() => toggleValueSelection(opt.key)}
+                        className={`
+                          flex items-center gap-3 p-2 rounded-lg cursor-pointer transition-all
+                          ${isSelected 
+                            ? 'bg-blue-100 border-2 border-blue-500' 
+                            : 'bg-white border-2 border-gray-200 hover:border-blue-300'
+                          }
+                        `}
+                      >
+                        <div className={`
+                          w-5 h-5 rounded border-2 flex items-center justify-center flex-shrink-0
+                          ${isSelected 
+                            ? 'border-blue-500 bg-blue-500' 
+                            : 'border-gray-300'
+                          }
+                        `}>
+                          {isSelected && <Check size={12} className="text-white" />}
+                        </div>
+                        <div className="flex-1">
+                          <div className="font-medium text-gray-900">{opt.label || opt.key}</div>
+                          <div className="text-xs text-gray-500 font-mono">{opt.key}</div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+              <p className="text-xs text-gray-500 mt-2">
+                Bu audience'a dahil edilecek değerleri seçin. Sadece seçili değerlere sahip katılımcılar audience'a dahil edilecek.
+              </p>
+            </div>
+          )}
+
+          <div className="flex items-center justify-end gap-3">
+            <button
+              type="button"
+              onClick={onClose}
+              className="px-4 py-2 text-gray-600 hover:text-gray-800 font-medium text-sm transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              className="px-6 py-2 bg-blue-600 text-white rounded-xl font-medium text-sm hover:bg-blue-700 transition-all flex items-center gap-2"
+            >
+              <Save size={16} />
+              Create Audience
+            </button>
+          </div>
+        </form>
+      </div>
     </div>
   );
 };

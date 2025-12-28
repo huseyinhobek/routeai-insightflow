@@ -30,6 +30,7 @@ from services.quality_analyzer import QualityAnalyzer, QualityReport
 from services.export_service import ExportService
 from services.transform_service import transform_service, EXCLUDE_PATTERNS
 from services.smart_filter_service import smart_filter_service
+from services.ingestion_service import ingestion_service
 from dataclasses import asdict as dataclass_asdict
 
 # Auth imports
@@ -70,6 +71,10 @@ app.add_middleware(
 app.include_router(auth_router)
 app.include_router(admin_router)
 
+# Include research router
+from routers.research import router as research_router
+app.include_router(research_router)
+
 # Explicit OPTIONS handler for CORS preflight
 @app.options("/{full_path:path}")
 async def options_handler(full_path: str):
@@ -82,6 +87,22 @@ async def http_exception_handler(request, exc: HTTPException):
     return JSONResponse(
         status_code=exc.status_code,
         content={"detail": exc.detail},
+        headers={
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Methods": "*",
+            "Access-Control-Allow-Headers": "*",
+        }
+    )
+
+# General exception handler to ensure CORS headers are always sent
+@app.exception_handler(Exception)
+async def general_exception_handler(request, exc: Exception):
+    from fastapi.responses import JSONResponse
+    import traceback
+    logger.error(f"Unhandled exception: {exc}", exc_info=True)
+    return JSONResponse(
+        status_code=500,
+        content={"detail": f"Internal server error: {str(exc)}"},
         headers={
             "Access-Control-Allow-Origin": "*",
             "Access-Control-Allow-Methods": "*",
@@ -104,6 +125,21 @@ _transform_bg_lock = threading.Lock()
 async def startup_event():
     """Initialize database on startup"""
     try:
+        # Load pgvector extension first (if PostgreSQL)
+        if DATABASE_AVAILABLE and engine is not None:
+            from sqlalchemy import text
+            try:
+                with engine.connect() as conn:
+                    conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
+                    conn.commit()
+                    print("[OK] pgvector extension ready")
+            except Exception as ext_e:
+                # If permission denied or extension already exists, that's okay
+                if "permission denied" in str(ext_e).lower() or "already exists" in str(ext_e).lower():
+                    print(f"[INFO] pgvector extension: {ext_e}")
+                else:
+                    print(f"[UYARI] pgvector extension warning: {ext_e}")
+        
         Base.metadata.create_all(bind=engine)
         print("[OK] Database tables created successfully")
     except Exception as e:
@@ -417,17 +453,62 @@ def save_to_database(db: Session, dataset_info: dict) -> Dataset:
             data_quality_score=data_quality_score,
             digital_twin_readiness=dataset_info.get("digitalTwinReadiness"),
             variables_meta=dataset_info["variables"],
-            quality_report=dataset_info.get("qualityReport")
+            quality_report=dataset_info.get("qualityReport"),
+            org_id=dataset_info.get("org_id"),
+            created_by=dataset_info.get("created_by"),
+            version=1  # Initial version
         )
         
         db.add(dataset)
-        
-        # Variables are stored in variables_meta JSON field, no need for separate Variable table
-        # This avoids issues with numpy types and reduces database complexity
-        # If you need to query variables separately, use JSON queries on variables_meta
-        
         db.commit()
         db.refresh(dataset)
+        
+        # Populate Variable, ValueLabel, Respondent, and Response tables
+        # Get dataframe from cache if available
+        df, meta = None, None
+        if dataset_info["id"] in _dataframe_cache:
+            cache_entry = _dataframe_cache[dataset_info["id"]]
+            df = cache_entry.get("df")
+            meta = cache_entry.get("meta")
+        
+        # If not in cache, load from file
+        if df is None:
+            file_path = Path(dataset.file_path)
+            if not file_path.exists():
+                file_path = UPLOAD_DIR / file_path.name
+            if file_path.exists():
+                df, meta = load_file_to_dataframe(file_path)
+        
+        if df is not None and meta is not None:
+            try:
+                # Populate respondents and responses (background job would be better, but sync for now)
+                ingestion_service.populate_respondents_and_responses(
+                    db=db,
+                    dataset_id=dataset.id,
+                    df=df,
+                    variables=dataset_info.get("variables", []),
+                    meta=meta
+                )
+                
+                # Enqueue Celery tasks for utterance and embedding generation
+                try:
+                    from tasks.research_tasks import (
+                        generate_utterances_for_dataset,
+                        generate_embeddings_for_variables,
+                        generate_embeddings_for_utterances
+                    )
+                    # Trigger background jobs
+                    generate_utterances_for_dataset.delay(dataset.id)
+                    generate_embeddings_for_variables.delay(dataset.id)
+                    # Note: generate_embeddings_for_utterances will be triggered after utterances are generated
+                    # or can be triggered separately later
+                except Exception as celery_err:
+                    logger.warning(f"Failed to enqueue Celery tasks for dataset {dataset.id}: {celery_err}")
+                    # Continue without background jobs if Celery is not available
+            except Exception as e:
+                logger.error(f"Error populating respondents/responses: {e}", exc_info=True)
+                # Don't fail dataset creation if population fails
+        
         return dataset
     except Exception as e:
         if db:
@@ -800,15 +881,25 @@ async def upload_dataset(
 
 
 @app.get("/api/datasets")
-async def list_datasets(db: Session = Depends(get_db)):
-    """List all previously uploaded datasets"""
-    # First return from in-memory cache
+async def list_datasets(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user_optional)
+):
+    """List datasets - filtered by user's organization for multi-tenant isolation"""
     results = []
+    user_org_id = current_user.org_id if current_user else None
     
+    # Get dataset IDs from cache that belong to user's org
+    cache_dataset_ids = set()
     for dataset_id, data in _dataframe_cache.items():
         info = data.get("info")
         if not isinstance(info, dict):
             continue
+        # Check org_id for multi-tenant isolation
+        cache_org_id = info.get("org_id")
+        if user_org_id and cache_org_id and cache_org_id != user_org_id:
+            continue  # Skip datasets from other organizations
+        cache_dataset_ids.add(dataset_id)
         results.append({
             "id": dataset_id,
             "filename": info.get("original_filename", info.get("filename")),
@@ -820,10 +911,18 @@ async def list_datasets(db: Session = Depends(get_db)):
             "overallCompletionRate": info.get("overallCompletionRate")
         })
     
-    # Then try database
+    # Then try database - with org_id filter
     if db is not None and DATABASE_AVAILABLE:
         try:
-            datasets = db.query(Dataset).order_by(Dataset.created_at.desc()).all()
+            query = db.query(Dataset)
+            
+            # Apply org_id filter for multi-tenant isolation
+            if user_org_id:
+                query = query.filter(
+                    (Dataset.org_id == user_org_id) | (Dataset.org_id == None)
+                )
+            
+            datasets = query.order_by(Dataset.created_at.desc()).all()
             existing_ids = {r["id"] for r in results}
             
             for d in datasets:
@@ -847,11 +946,22 @@ async def list_datasets(db: Session = Depends(get_db)):
 
 
 @app.get("/api/datasets/{dataset_id}")
-async def get_dataset(dataset_id: str, db: Session = Depends(get_db)):
-    """Get dataset metadata"""
+async def get_dataset(
+    dataset_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user_optional)
+):
+    """Get dataset metadata - with org_id check for multi-tenant isolation"""
+    user_org_id = current_user.org_id if current_user else None
+    
     # Try cache first - but only if we have complete info
     if dataset_id in _dataframe_cache and "info" in _dataframe_cache[dataset_id]:
         info = _dataframe_cache[dataset_id]["info"]
+        # Check org_id for multi-tenant isolation
+        cache_org_id = info.get("org_id")
+        if user_org_id and cache_org_id and cache_org_id != user_org_id:
+            raise HTTPException(status_code=403, detail="Access denied to this dataset")
+        
         # Check if cache has all required fields
         if "variables" in info and info.get("variables"):
             return {
@@ -870,6 +980,10 @@ async def get_dataset(dataset_id: str, db: Session = Depends(get_db)):
         dataset = db.query(Dataset).filter(Dataset.id == dataset_id).first()
         
         if dataset:
+            # Check org_id for multi-tenant isolation
+            if user_org_id and dataset.org_id and dataset.org_id != user_org_id:
+                raise HTTPException(status_code=403, detail="Access denied to this dataset")
+            
             # Try to load dataframe if not in cache (for future use)
             try:
                 df, meta = get_dataframe(dataset_id, db)
@@ -1096,14 +1210,40 @@ async def delete_dataset(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user_optional),
 ):
-    """Delete a dataset"""
+    """
+    Delete a dataset and all related data (cascade delete).
+    
+    This will delete:
+    - Dataset record
+    - Variables, ValueLabels (cascade)
+    - Respondents, Responses (cascade)
+    - Utterances, Embeddings (cascade)
+    - Audiences, AudienceMembers (cascade)
+    - Threads, ThreadQuestions, ThreadResults (cascade)
+    - CacheAnswers (manual cleanup)
+    - TransformJobs, TransformResults (manual cleanup)
+    - ExportHistory (cascade)
+    - Physical file on disk
+    - In-memory cache entry
+    """
+    from models import (
+        TransformJob, CacheAnswer
+    )
+    
     deleted = False
     deleted_filename = None
     
-    # If DB is available, also delete transform jobs/results for this dataset to avoid DB bloat
+    # If DB is available, cleanup related data
     if db is not None and DATABASE_AVAILABLE:
         try:
-            # If any transform job is currently running in this process, request stop and wait briefly
+            # Check if dataset exists
+            dataset = db.query(Dataset).filter(Dataset.id == dataset_id).first()
+            if not dataset:
+                raise HTTPException(status_code=404, detail="Dataset not found")
+            
+            deleted_filename = dataset.original_filename
+            
+            # 1. Stop any running transform jobs
             jobs = db.query(TransformJob).filter(TransformJob.dataset_id == dataset_id).all()
             running_job_ids = [j.id for j in jobs if j.status == "running"]
             if running_job_ids:
@@ -1134,13 +1274,38 @@ async def delete_dataset(
                         detail="Dataset silinemedi: dönüşüm işi halen çalışıyor. Önce dönüşümü durdurun ve tekrar deneyin."
                     )
             
-            # Delete transform jobs (results/exclude_patterns cascade from FK/relationship)
+            # 2. Delete transform jobs (results/exclude_patterns cascade from FK/relationship)
             for j in jobs:
                 try:
                     db.delete(j)
                 except Exception:
                     pass
             db.commit()
+            
+            # 3. Delete CacheAnswer records for this dataset (they don't have FK cascade)
+            try:
+                cache_answers = db.query(CacheAnswer).filter(CacheAnswer.dataset_id == dataset_id).all()
+                for cache_answer in cache_answers:
+                    db.delete(cache_answer)
+                db.commit()
+            except Exception as e:
+                logger.warning(f"Failed to delete cache answers: {e}")
+                db.rollback()
+            
+            # 4. Delete physical file
+            if dataset.file_path and os.path.exists(dataset.file_path):
+                try:
+                    os.remove(dataset.file_path)
+                except Exception as e:
+                    logger.warning(f"Failed to delete physical file {dataset.file_path}: {e}")
+            
+            # 5. Delete dataset record (this will cascade delete all related records via FK constraints)
+            # Related tables with FK CASCADE: Variable, Respondent, Audience, Thread, ExportHistory, Embedding
+            # SQLAlchemy relationships will also cascade delete: ValueLabel, Response, Utterance, AudienceMember, ThreadQuestion, ThreadResult
+            db.delete(dataset)
+            db.commit()
+            deleted = True
+            
         except HTTPException:
             raise
         except Exception as e:
@@ -1148,41 +1313,33 @@ async def delete_dataset(
                 db.rollback()
             except Exception:
                 pass
-            raise HTTPException(status_code=500, detail=f"Failed to delete transform jobs for dataset: {e}")
+            logger.error(f"Error deleting dataset {dataset_id}: {e}", exc_info=True)
+            raise HTTPException(status_code=500, detail=f"Failed to delete dataset: {str(e)}")
     
-    # Try cache first
+    # 6. Clean up in-memory cache
     if dataset_id in _dataframe_cache:
         info = _dataframe_cache[dataset_id].get("info", {})
-        file_path = info.get("file_path")
-        deleted_filename = info.get("original_filename", info.get("filename"))
-        if file_path and os.path.exists(file_path):
-            os.remove(file_path)
+        if not deleted_filename:
+            deleted_filename = info.get("original_filename", info.get("filename"))
+        # File already deleted above, just remove from cache
         del _dataframe_cache[dataset_id]
         deleted = True
-    
-    # Try database
-    if db is not None and DATABASE_AVAILABLE:
-        dataset = db.query(Dataset).filter(Dataset.id == dataset_id).first()
-        if dataset:
-            deleted_filename = dataset.original_filename
-            if os.path.exists(dataset.file_path):
-                os.remove(dataset.file_path)
-            db.delete(dataset)
-            db.commit()
-            deleted = True
     
     if not deleted:
         raise HTTPException(status_code=404, detail="Dataset not found")
     
-    # Audit log
-    audit_dataset_delete(
-        db=db,
-        request=request,
-        dataset_id=dataset_id,
-        filename=deleted_filename or "unknown",
-    )
+    # 7. Audit log (after successful deletion)
+    try:
+        audit_dataset_delete(
+            db=db,
+            request=request,
+            dataset_id=dataset_id,
+            filename=deleted_filename or "unknown",
+        )
+    except Exception as e:
+        logger.warning(f"Failed to create audit log for dataset deletion: {e}")
     
-    return {"message": "Dataset deleted successfully"}
+    return {"message": "Dataset deleted successfully", "dataset_id": dataset_id}
 
 
 @app.get("/health")
@@ -1202,6 +1359,97 @@ async def get_config():
         "upload_dir": str(UPLOAD_DIR),
         "version": "2.0.0"
     }
+
+
+@app.post("/api/digital-insight/ask")
+@app.post("/digital-insight/ask")  # nginx compatibility (sav-api rewrite)
+async def ask_digital_insight(
+    request: Request,
+    body: dict,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user_optional),
+):
+    """
+    Ask a question about the dataset. 
+    This endpoint is prepared for future AI/embedding integration.
+    """
+    dataset_id = body.get("datasetId")
+    question = body.get("question", "").strip()
+    
+    if not dataset_id:
+        raise HTTPException(status_code=400, detail="Dataset ID is required")
+    
+    if not question:
+        raise HTTPException(status_code=400, detail="Question is required")
+    
+    # Get dataset metadata from database
+    dataset = None
+    if db is not None and DATABASE_AVAILABLE:
+        dataset = db.query(Dataset).filter(Dataset.id == dataset_id).first()
+    
+    if not dataset:
+        raise HTTPException(status_code=404, detail="Dataset not found")
+    
+    # Load dataset data (from cache or file system)
+    try:
+        df, meta = get_dataframe(dataset_id, db)
+        if df is None:
+            raise HTTPException(status_code=404, detail="Dataset file not found or could not be loaded")
+        
+        # Get basic statistics
+        n_rows = len(df)
+        n_cols = len(df.columns)
+        variables_meta = dataset.variables_meta if dataset.variables_meta else []
+        
+        # TODO: Future implementation with AI
+        # - Use embeddings to find relevant data
+        # - Call AI model with context from dataset
+        # - Return intelligent answer based on actual data
+        
+        # For now, provide basic information based on the question
+        question_lower = question.lower()
+        
+        if any(word in question_lower for word in ['kaç', 'sayı', 'toplam', 'adet', 'count']):
+            if 'satır' in question_lower or 'row' in question_lower or 'katılımcı' in question_lower:
+                answer = f"Veri setinizde toplam **{n_rows:,}** satır (katılımcı) bulunmaktadır."
+            elif 'sütun' in question_lower or 'column' in question_lower or 'değişken' in question_lower:
+                answer = f"Veri setinizde toplam **{n_cols}** değişken (sütun) bulunmaktadır."
+            else:
+                answer = f"Veri setinizde **{n_rows:,}** satır ve **{n_cols}** değişken bulunmaktadır."
+        elif any(word in question_lower for word in ['değişken', 'variable', 'sütun', 'column']):
+            if variables_meta and len(variables_meta) > 0:
+                var_names = [v.get('name', '') for v in variables_meta[:10] if isinstance(v, dict)]
+                if var_names:
+                    var_list = ', '.join(var_names)
+                    answer = f"Veri setinizde **{n_cols}** değişken bulunmaktadır.\n\nİlk 10 değişken: {var_list}"
+                    if n_cols > 10:
+                        answer += f"\n\n... ve {n_cols - 10} değişken daha."
+                else:
+                    answer = f"Veri setinizde **{n_cols}** değişken bulunmaktadır."
+            else:
+                answer = f"Veri setinizde **{n_cols}** değişken bulunmaktadır."
+        else:
+            # Generic answer
+            answer = f"""Veri setiniz hakkında bilgi:
+
+📊 **İstatistikler:**
+- Toplam satır sayısı: {n_rows:,}
+- Toplam değişken sayısı: {n_cols}
+- Dosya adı: {dataset.original_filename}
+
+Sorduğunuz soru: "{question}"
+
+💡 **Not:** Bu özellik şu anda geliştirme aşamasındadır. İleride embedding ve gelişmiş AI modelleri ile daha detaylı ve akıllı cevaplar alabileceksiniz."""
+        
+        return {"answer": answer}
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error loading dataset for digital insight: {e}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Error processing question: {str(e)}")
 
 
 @app.post("/api/smart-filters/generate")
@@ -1621,7 +1869,38 @@ def _run_transform_job_in_thread(job_id: str, dataset_id: str):
                 loop.run_until_complete(transform_service.run_job(db_session, job_id, df_bg, variables_bg))
             finally:
                 loop.close()
+
             print(f"[BG] Transform job {job_id} finished")
+
+            # ------------------------------------------------------------------
+            # Twin post-processing pipeline:
+            # After a successful transform job, upsert utterances from
+            # TransformResult sentences and generate utterance embeddings so
+            # that RAG/threads can immediately use them.
+            # ------------------------------------------------------------------
+            try:
+                from services.utterance_service import utterance_service
+                from services.embedding_service import embedding_service
+
+                # Upsert utterances for this dataset/job
+                utt_stats = utterance_service.generate_utterances_from_transform_results(
+                    db=db_session,
+                    dataset_id=dataset_id,
+                    job_id=job_id,
+                )
+                print(f"[BG] Generated/updated utterances after job {job_id}: {utt_stats}")
+
+                # Generate embeddings for those utterances
+                emb_stats = embedding_service.generate_embeddings_for_utterances(
+                    db=db_session,
+                    dataset_id=dataset_id,
+                )
+                print(f"[BG] Generated utterance embeddings after job {job_id}: {emb_stats}")
+            except Exception as post_err:
+                # Do not fail the job if post-processing fails; just log visibly.
+                print(f"[BG] Post-processing (utterances/embeddings) failed for job {job_id}: {post_err}")
+                import traceback as _tb
+                _tb.print_exc()
         except Exception as e:
             print(f"[BG] Transform job error: {e}")
             import traceback
@@ -1639,9 +1918,10 @@ async def get_dataset_rows(
     dataset_id: str,
     offset: int = 0,
     limit: int = 100,
+    include_labels: bool = True,
     db: Session = Depends(get_db)
 ):
-    """Get dataset rows with pagination"""
+    """Get dataset rows with pagination. Returns both raw and labeled values."""
     df, meta = get_dataframe(dataset_id, db)
     
     if df is None:
@@ -1650,19 +1930,45 @@ async def get_dataset_rows(
     total_rows = len(df)
     end_idx = min(offset + limit, total_rows)
     
+    # Get value labels from metadata
+    value_labels_map = {}
+    if include_labels and hasattr(meta, 'variable_value_labels'):
+        value_labels_map = meta.variable_value_labels if meta.variable_value_labels else {}
+    
     rows = []
     for idx in range(offset, end_idx):
         row_data = df.iloc[idx].to_dict()
-        # Convert numpy types to Python types
+        # Convert numpy types to Python types and add labeled values
         cleaned_row = {}
+        labeled_row = {}
+        
         for k, v in row_data.items():
+            # Raw value
             if pd.isna(v):
                 cleaned_row[k] = None
+                labeled_row[k] = None
             elif hasattr(v, 'item'):
                 cleaned_row[k] = v.item()
+                raw_val = v.item()
             else:
                 cleaned_row[k] = v
-        rows.append({"index": idx, "data": cleaned_row})
+                raw_val = v
+            
+            # Labeled value
+            if include_labels and k in value_labels_map:
+                label_dict = value_labels_map[k]
+                if raw_val is not None and str(raw_val) in label_dict:
+                    labeled_row[k] = label_dict[str(raw_val)]
+                else:
+                    labeled_row[k] = raw_val
+            else:
+                labeled_row[k] = cleaned_row[k]
+        
+        rows.append({
+            "index": idx,
+            "data": cleaned_row,
+            "labeled": labeled_row if include_labels else None
+        })
     
     return {
         "total": total_rows,
@@ -2000,7 +2306,9 @@ async def start_transform_job(
         exclude_config=exclude_config,
         admin_columns=admin_columns,
         column_analysis=column_analysis_data,
-        respondent_id_column=respondent_id_column
+        respondent_id_column=respondent_id_column,
+        org_id=current_user.org_id if current_user else None,
+        created_by=current_user.id if current_user else None
     )
 
     # Mark as running immediately so UI doesn't get stuck at "idle" even briefly
@@ -2232,14 +2540,31 @@ async def get_transform_job_status(job_id: str, db: Session = Depends(get_db)):
 
 @app.get("/api/transform/jobs/{dataset_id}")
 @app.get("/transform/jobs/{dataset_id}")  # nginx compatibility (sav-api rewrite)
-async def get_transform_jobs_for_dataset(dataset_id: str, db: Session = Depends(get_db)):
-    """Get all transform jobs for a dataset"""
+async def get_transform_jobs_for_dataset(
+    dataset_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user_optional)
+):
+    """Get all transform jobs for a dataset - with org_id check"""
     if db is None or not DATABASE_AVAILABLE:
         raise HTTPException(status_code=503, detail="Database not available")
     
-    jobs = db.query(TransformJob).filter(
-        TransformJob.dataset_id == dataset_id
-    ).order_by(TransformJob.created_at.desc()).all()
+    user_org_id = current_user.org_id if current_user else None
+    
+    # First check if user has access to this dataset
+    dataset = db.query(Dataset).filter(Dataset.id == dataset_id).first()
+    if dataset and user_org_id and dataset.org_id and dataset.org_id != user_org_id:
+        raise HTTPException(status_code=403, detail="Access denied to this dataset")
+    
+    # Build query with org_id filter
+    query = db.query(TransformJob).filter(TransformJob.dataset_id == dataset_id)
+    
+    if user_org_id:
+        query = query.filter(
+            (TransformJob.org_id == user_org_id) | (TransformJob.org_id == None)
+        )
+    
+    jobs = query.order_by(TransformJob.created_at.desc()).all()
     
     return [{
         "jobId": job.id,

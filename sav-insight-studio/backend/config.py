@@ -64,7 +64,24 @@ class Settings(BaseSettings):
     
     # Rate Limiting
     RATE_LIMIT_LOGIN: int = 5  # requests per minute
-    RATE_LIMIT_API: int = 100  # requests per minute
+    RATE_LIMIT_API: int = 100
+    
+    # Celery Configuration (for background tasks)
+    CELERY_BROKER_URL: str = "redis://localhost:6379/0"  # Redis broker URL
+    CELERY_RESULT_BACKEND: str = "redis://localhost:6379/0"  # Redis result backend URL  # requests per minute
+    
+    # ==========================================================================
+    # RESEARCH WORKFLOW VERSIONING
+    # ==========================================================================
+    
+    # Router heuristics version (increment when router logic changes)
+    ROUTER_VERSION: str = "1.0"
+    
+    # Narration policy version (increment when quantifier policy changes)
+    NARRATION_POLICY_VERSION: str = "1.0"
+    
+    # Embedding model ID (for cache invalidation)
+    EMBEDDING_MODEL: str = "text-embedding-3-small"
     
     @property
     def allowed_origins_list(self) -> List[str]:

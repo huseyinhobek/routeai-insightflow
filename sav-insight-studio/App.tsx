@@ -14,10 +14,15 @@ import Exports from './pages/Exports';
 import PreviousAnalyses from './pages/PreviousAnalyses';
 import QualityReport from './pages/QualityReport';
 import TwinTransformer from './pages/TwinTransformer';
+import DigitalInsightPage from './pages/DigitalInsightPage';
+import ParticipantDataPage from './pages/ParticipantDataPage';
 import AdminPage from './pages/AdminPage';
 import AuditLogPage from './pages/AuditLogPage';
 import SuperAdminPage from './pages/SuperAdminPage';
 import ChangePasswordPage from './pages/ChangePasswordPage';
+import AudiencesPage from './pages/AudiencesPage';
+import ThreadsPage from './pages/ThreadsPage';
+import ThreadChatPage from './pages/ThreadChatPage';
 
 const App: React.FC = () => {
   return (
@@ -40,7 +45,12 @@ const App: React.FC = () => {
               <Route path="/variables" element={<VariableExplorer />} />
               <Route path="/filters" element={<SmartFilters />} />
               <Route path="/twin-transformer" element={<TwinTransformer />} />
+              <Route path="/digital-insight" element={<DigitalInsightPage />} />
+              <Route path="/participant-data" element={<ParticipantDataPage />} />
               <Route path="/exports" element={<Exports />} />
+              <Route path="/audiences" element={<AudiencesPage />} />
+              <Route path="/threads" element={<ThreadsPage />} />
+              <Route path="/threads/:threadId" element={<ThreadChatPage />} />
             </Route>
             
             {/* Admin routes - require admin role */}

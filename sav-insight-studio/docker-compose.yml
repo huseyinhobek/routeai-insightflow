@@ -1,0 +1,103 @@
+services:
+  postgres:
+    image: pgvector/pgvector:pg15
+    container_name: sav-postgres
+    environment:
+      POSTGRES_DB: sav_insight
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    ports:
+      - "5433:5432"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: sav-redis
+    ports:
+      - "6379:6379"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build: ./backend
+    container_name: sav-backend
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./backend:/app
+      - sav_uploads:/tmp/sav_uploads
+    environment:
+      - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/sav_insight
+      - PYTHONUNBUFFERED=1
+      - DEBUG=true
+      - UPLOAD_DIR=/tmp/sav_uploads
+      - JWT_SECRET=dev-secret-change-in-production-min-32-chars!
+      - ALLOWED_ORIGINS=*
+      - SESSION_COOKIE_SECURE=false
+      - APP_BASE_URL=http://localhost:3000
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+    env_file:
+      - ./backend/.env
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    command: uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+
+  celery-worker:
+    build: ./backend
+    container_name: sav-celery-worker
+    volumes:
+      - ./backend:/app
+      - sav_uploads:/tmp/sav_uploads
+    environment:
+      - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/sav_insight
+      - PYTHONUNBUFFERED=1
+      - DEBUG=true
+      - UPLOAD_DIR=/tmp/sav_uploads
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+    env_file:
+      - ./backend/.env
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      backend:
+        condition: service_started
+    restart: unless-stopped
+    command: celery -A celery_app worker --loglevel=info
+
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+      args:
+        - VITE_API_BASE_URL=http://localhost:8000/api
+        - VITE_BASE_PATH=/
+    container_name: sav-frontend
+    ports:
+      - "3000:80"
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+volumes:
+  sav_uploads:
+  pgdata:
+

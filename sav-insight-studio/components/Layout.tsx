@@ -16,7 +16,9 @@ import {
   Building2,
   ScrollText,
   ChevronUp,
-  Shield
+  Shield,
+  MessageCircle,
+  Users
 } from 'lucide-react';
 import nativeLogo from '../native-logo.png';
 import { useAuth } from '../contexts/AuthContext';
@@ -51,10 +53,14 @@ const Layout: React.FC = () => {
 
   const navItems = [
     { to: '/overview', icon: <LayoutDashboard size={20} />, label: 'Overview' },
+    { to: '/audiences', icon: <Users size={20} />, label: 'Audiences' },
+    { to: '/threads', icon: <MessageCircle size={20} />, label: 'Threads' },
     { to: '/quality', icon: <FileBarChart size={20} />, label: 'Quality Report' },
     { to: '/variables', icon: <Database size={20} />, label: 'Variable Explorer' },
     { to: '/filters', icon: <Filter size={20} />, label: 'Smart Filters' },
     { to: '/twin-transformer', icon: <Sparkles size={20} />, label: 'Twin Transformer' },
+    { to: '/digital-insight', icon: <MessageCircle size={20} />, label: 'Dijital Insight' },
+    { to: '/participant-data', icon: <Users size={20} />, label: 'Katılımcı Verileri' },
     { to: '/exports', icon: <Download size={20} />, label: 'Export' },
   ];
 

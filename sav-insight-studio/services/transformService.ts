@@ -14,9 +14,9 @@ class TransformService {
   /**
    * Get dataset rows with pagination (for preview/table)
    */
-  async getDatasetRows(datasetId: string, offset = 0, limit = 100): Promise<DatasetRowsResponse> {
+  async getDatasetRows(datasetId: string, offset = 0, limit = 100, includeLabels = true): Promise<DatasetRowsResponse> {
     const response = await fetch(
-      `${API_BASE_URL}/datasets/${datasetId}/rows?offset=${offset}&limit=${limit}`
+      `${API_BASE_URL}/datasets/${datasetId}/rows?offset=${offset}&limit=${limit}&include_labels=${includeLabels}`
     );
 
     if (!response.ok) {

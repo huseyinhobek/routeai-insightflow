@@ -81,7 +81,10 @@ class ApiService {
     const response = await apiFetch(`${API_BASE_URL}/datasets/${id}`, {
       method: 'DELETE',
     });
-    if (!response.ok) throw new Error('Failed to delete dataset');
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({ detail: 'Failed to delete dataset' }));
+      throw new Error(errorData.detail || 'Failed to delete dataset');
+    }
   }
 
   async getQualityReport(datasetId: string): Promise<QualityReport> {
@@ -188,6 +191,198 @@ class ApiService {
       throw new Error(error.detail || 'Failed to save smart filters');
     }
   }
+
+  async askQuestion(datasetId: string, question: string): Promise<{ answer: string }> {
+    const response = await apiFetch(`${API_BASE_URL}/digital-insight/ask`, {
+      method: 'POST',
+      body: JSON.stringify({ datasetId, question }),
+    });
+
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ detail: 'Failed to get answer' }));
+      throw new Error(error.detail || 'Failed to get answer');
+    }
+
+    return response.json();
+  }
+
+  // Research Workflow APIs
+  async createAudience(data: { dataset_id: string; name: string; description?: string; filter_json: any }): Promise<any> {
+    const response = await apiFetch(`${API_BASE_URL}/research/audiences`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ detail: 'Failed to create audience' }));
+      throw new Error(error.detail || 'Failed to create audience');
+    }
+
+    return response.json();
+  }
+
+  async listAudiences(datasetId?: string): Promise<any[]> {
+    const url = datasetId 
+      ? `${API_BASE_URL}/research/audiences?dataset_id=${datasetId}`
+      : `${API_BASE_URL}/research/audiences`;
+    
+    const response = await apiFetch(url);
+
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ detail: 'Failed to list audiences' }));
+      throw new Error(error.detail || 'Failed to list audiences');
+    }
+
+    return response.json();
+  }
+
+  async getAudience(audienceId: string): Promise<any> {
+    const response = await apiFetch(`${API_BASE_URL}/research/audiences/${audienceId}`);
+
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ detail: 'Failed to get audience' }));
+      throw new Error(error.detail || 'Failed to get audience');
+    }
+
+    return response.json();
+  }
+
+  async updateAudience(audienceId: string, data: { name?: string; description?: string; filter_json?: any }): Promise<any> {
+    const response = await apiFetch(`${API_BASE_URL}/research/audiences/${audienceId}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ detail: 'Failed to update audience' }));
+      throw new Error(error.detail || 'Failed to update audience');
+    }
+
+    return response.json();
+  }
+
+  async deleteAudience(audienceId: string): Promise<void> {
+    const response = await apiFetch(`${API_BASE_URL}/research/audiences/${audienceId}`, {
+      method: 'DELETE',
+    });
+
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ detail: 'Failed to delete audience' }));
+      throw new Error(error.detail || 'Failed to delete audience');
+    }
+  }
+
+  async refreshAudienceMembership(audienceId: string): Promise<any> {
+    const response = await apiFetch(`${API_BASE_URL}/research/audiences/${audienceId}/refresh-membership`, {
+      method: 'POST',
+    });
+
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ detail: 'Failed to refresh membership' }));
+      throw new Error(error.detail || 'Failed to refresh membership');
+    }
+
+    return response.json();
+  }
+
+  async createThread(data: { dataset_id: string; audience_id?: string; title?: string }): Promise<any> {
+    const response = await apiFetch(`${API_BASE_URL}/research/threads`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ detail: 'Failed to create thread' }));
+      throw new Error(error.detail || 'Failed to create thread');
+    }
+
+    return response.json();
+  }
+
+  async listThreads(datasetId?: string, audienceId?: string): Promise<any[]> {
+    const params = new URLSearchParams();
+    if (datasetId) params.append('dataset_id', datasetId);
+    if (audienceId) params.append('audience_id', audienceId);
+    
+    const url = `${API_BASE_URL}/research/threads${params.toString() ? '?' + params.toString() : ''}`;
+    const response = await apiFetch(url);
+
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ detail: 'Failed to list threads' }));
+      throw new Error(error.detail || 'Failed to list threads');
+    }
+
+    return response.json();
+  }
+
+  async getThread(threadId: string): Promise<any> {
+    const response = await apiFetch(`${API_BASE_URL}/research/threads/${threadId}`);
+
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ detail: 'Failed to get thread' }));
+      throw new Error(error.detail || 'Failed to get thread');
+    }
+
+    return response.json();
+  }
+
+  async addThreadQuestion(threadId: string, questionText: string): Promise<any> {
+    const response = await apiFetch(`${API_BASE_URL}/research/threads/${threadId}/questions`, {
+      method: 'POST',
+      body: JSON.stringify({ question_text: questionText }),
+    });
+
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ detail: 'Failed to add question' }));
+      throw new Error(error.detail || 'Failed to add question');
+    }
+
+    return response.json();
+  }
+
+  async getSuggestedQuestions(datasetId: string, audienceId?: string): Promise<any> {
+    const url = audienceId
+      ? `${API_BASE_URL}/research/suggested-questions?dataset_id=${datasetId}&audience_id=${audienceId}`
+      : `${API_BASE_URL}/research/suggested-questions?dataset_id=${datasetId}`;
+    
+    const response = await apiFetch(url);
+
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ detail: 'Failed to get suggested questions' }));
+      throw new Error(error.detail || 'Failed to get suggested questions');
+    }
+
+    return response.json();
+  }
+
+  async populateDatasetData(datasetId: string): Promise<any> {
+    const response = await apiFetch(`${API_BASE_URL}/research/datasets/${datasetId}/populate-data`, {
+      method: 'POST',
+      body: JSON.stringify({}),
+    });
+
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ detail: 'Failed to populate dataset data' }));
+      throw new Error(error.detail || 'Failed to populate dataset data');
+    }
+
+    return response.json();
+  }
+
+  async generateEmbeddings(datasetId: string): Promise<any> {
+    const response = await apiFetch(`${API_BASE_URL}/research/datasets/${datasetId}/generate-embeddings`, {
+      method: 'POST',
+      body: JSON.stringify({}),
+    });
+
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ detail: 'Failed to generate embeddings' }));
+      throw new Error(error.detail || 'Failed to generate embeddings');
+    }
+
+    return response.json();
+  }
 }
 
 export const apiService = new ApiService();
+export default apiService;

@@ -484,7 +484,9 @@ class TransformService:
         exclude_config: Dict[str, bool] = None,
         admin_columns: List[str] = None,
         column_analysis: Dict[str, Any] = None,
-        respondent_id_column: str = None
+        respondent_id_column: str = None,
+        org_id: str = None,
+        created_by: str = None
     ) -> TransformJob:
         """Create a new transform job"""
         job = TransformJob(
@@ -509,7 +511,9 @@ class TransformService:
             exclude_options_config=exclude_config or {},
             admin_columns=admin_columns or [],
             column_analysis=column_analysis,
-            respondent_id_column=respondent_id_column
+            respondent_id_column=respondent_id_column,
+            org_id=org_id,
+            created_by=created_by
         )
         
         db.add(job)
