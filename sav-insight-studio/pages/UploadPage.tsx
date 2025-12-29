@@ -187,12 +187,13 @@ const UploadPage: React.FC = () => {
       <div className="max-w-4xl mx-auto py-8">
         {/* Header */}
         <div className="text-center mb-12">
-          <div className="inline-flex items-center justify-center p-3 bg-gradient-to-br from-blue-600 to-indigo-600 rounded-2xl shadow-lg shadow-blue-200 mb-6">
-            <BarChart2 className="w-8 h-8 text-white" />
+          <div className="inline-flex items-center justify-center mb-6">
+            <img 
+              src="/aletheia-logo.png" 
+              alt="Aletheia" 
+              className="h-16"
+            />
           </div>
-          <h1 className="text-4xl font-extrabold text-gray-900 mb-3 tracking-tight">
-            Aletheia
-          </h1>
           <p className="text-lg text-gray-500 max-w-xl mx-auto">
             Analyze your survey datasets (SPSS, Excel, CSV), measure data quality, and evaluate digital twin readiness.
           </p>

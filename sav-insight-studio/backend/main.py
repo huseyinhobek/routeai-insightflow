@@ -63,6 +63,7 @@ allowed_origins = settings.allowed_origins_list
 if "*" in allowed_origins:
     # Replace wildcard with common development origins when credentials are enabled
     allowed_origins = [
+        "http://13.60.138.179",
         "http://localhost:3000",
         "http://localhost:3001",
         "http://127.0.0.1:3000",

@@ -178,14 +178,21 @@ const PreviousAnalyses: React.FC = () => {
 
         {/* Header */}
         <div className="flex items-center justify-between mb-8">
-          <div>
-            <h1 className="text-3xl font-bold text-gray-900 flex items-center">
-              <Clock className="mr-3 text-blue-600" />
-              Previous Analyses
-            </h1>
-            <p className="text-gray-500 mt-1">
-              Access your previously uploaded SAV file analyses
-            </p>
+          <div className="flex items-center space-x-4">
+            <img 
+              src="/aletheia-logo.png" 
+              alt="Aletheia" 
+              className="h-12"
+            />
+            <div>
+              <h1 className="text-3xl font-bold text-gray-900 flex items-center">
+                <Clock className="mr-3 text-blue-600" />
+                Previous Analyses
+              </h1>
+              <p className="text-gray-500 mt-1">
+                Access your previously uploaded SAV file analyses
+              </p>
+            </div>
           </div>
           <button
             onClick={loadDatasets}

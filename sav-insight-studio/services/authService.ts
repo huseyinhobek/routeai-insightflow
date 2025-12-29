@@ -165,21 +165,29 @@ class AuthService {
    */
   async getCurrentUser(): Promise<AuthUser | null> {
     try {
-      const response = await authFetch(`${API_BASE_URL}/auth/me`, {}, 5000); // 5 second timeout for /me
-      
-      if (response.status === 401) {
-        return null;
-      }
+      // Use /check endpoint which doesn't require authentication
+      const response = await authFetch(`${API_BASE_URL}/auth/check`, {}, 5000);
       
       if (!response.ok) {
-        console.error(`getCurrentUser failed with status ${response.status}`);
         return null;
       }
       
-      return response.json();
+      const data = await response.json();
+      
+      // If authenticated, return user data
+      if (data.authenticated && data.user) {
+        // Fetch full user info from /me if authenticated
+        const meResponse = await authFetch(`${API_BASE_URL}/auth/me`, {}, 5000);
+        if (meResponse.ok) {
+          return meResponse.json();
+        }
+        // Fallback to check response user data
+        return data.user as AuthUser;
+      }
+      
+      return null;
     } catch (error: any) {
-      console.error('getCurrentUser error:', error.message || error);
-      // Return null instead of throwing - this allows unauthenticated users to continue
+      // Silently fail - this is expected when user is not authenticated
       return null;
     }
   }

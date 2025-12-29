@@ -23,10 +23,9 @@ COPY routers/ ./routers/
 COPY auth/ ./auth/
 COPY middleware/ ./middleware/
 COPY tasks/ ./tasks/
-COPY uploads/ ./uploads/
 
-# Create upload directory
-RUN mkdir -p /tmp/sav_uploads
+# Create upload directory (uploads folder may not exist, so create it)
+RUN mkdir -p ./uploads /tmp/sav_uploads
 
 # Expose port
 EXPOSE 8000

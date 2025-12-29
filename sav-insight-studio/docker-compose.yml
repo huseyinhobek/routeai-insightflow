@@ -1,27 +1,23 @@
 services:
   postgres:
-    image: pgvector/pgvector:pg15
+    image: pgvector/pgvector:pg16
     container_name: sav-postgres
     environment:
-      POSTGRES_DB: sav_insight
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: insightflow
+      POSTGRES_USER: insightflow
+      POSTGRES_PASSWORD: RoutePassword-1
     volumes:
       - pgdata:/var/lib/postgresql/data
-    ports:
-      - "5433:5432"
     restart: unless-stopped
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
-      interval: 10s
+      test: ["CMD-SHELL", "pg_isready -U insightflow -d insightflow"]
+      interval: 5s
       timeout: 5s
       retries: 5
 
   redis:
     image: redis:7-alpine
     container_name: sav-redis
-    ports:
-      - "6379:6379"
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
@@ -33,12 +29,12 @@ services:
     build: ./backend
     container_name: sav-backend
     ports:
-      - "8000:8000"
+      - "127.0.0.1:8000:8000"
     volumes:
       - ./backend:/app
       - sav_uploads:/tmp/sav_uploads
     environment:
-      - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/sav_insight
+      - DATABASE_URL=postgresql://insightflow:RoutePassword-1@postgres:5432/insightflow
       - PYTHONUNBUFFERED=1
       - DEBUG=true
       - UPLOAD_DIR=/tmp/sav_uploads
@@ -65,7 +61,7 @@ services:
       - ./backend:/app
       - sav_uploads:/tmp/sav_uploads
     environment:
-      - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/sav_insight
+      - DATABASE_URL=postgresql://insightflow:RoutePassword-1@postgres:5432/insightflow
       - PYTHONUNBUFFERED=1
       - DEBUG=true
       - UPLOAD_DIR=/tmp/sav_uploads
@@ -88,11 +84,11 @@ services:
       context: .
       dockerfile: Dockerfile.frontend
       args:
-        - VITE_API_BASE_URL=http://localhost:8000/api
+        - VITE_API_BASE_URL=/api
         - VITE_BASE_PATH=/
     container_name: sav-frontend
     ports:
-      - "3000:80"
+      - "127.0.0.1:3000:80"
     depends_on:
       - backend
     restart: unless-stopped
@@ -100,4 +96,6 @@ services:
 volumes:
   sav_uploads:
   pgdata:
+    name: infra_postgres_data
+    external: true
 
