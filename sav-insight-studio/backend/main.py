@@ -58,9 +58,20 @@ app.add_middleware(SecurityHeadersMiddleware)
 app.add_middleware(OrgScopeMiddleware)
 
 # CORS middleware - Use configured origins
+# If allow_credentials=True, cannot use wildcard "*" - must specify exact origins
+allowed_origins = settings.allowed_origins_list
+if "*" in allowed_origins:
+    # Replace wildcard with common development origins when credentials are enabled
+    allowed_origins = [
+        "http://localhost:3000",
+        "http://localhost:3001",
+        "http://127.0.0.1:3000",
+        "http://127.0.0.1:3001",
+    ]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.allowed_origins_list,
+    allow_origins=allowed_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*", "X-CSRF-Token"],
@@ -84,13 +95,16 @@ async def options_handler(full_path: str):
 @app.exception_handler(HTTPException)
 async def http_exception_handler(request, exc: HTTPException):
     from fastapi.responses import JSONResponse
+    # Get origin from request for CORS
+    origin = request.headers.get("origin", "http://localhost:3000")
     return JSONResponse(
         status_code=exc.status_code,
         content={"detail": exc.detail},
         headers={
-            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Origin": origin if origin in allowed_origins else "http://localhost:3000",
             "Access-Control-Allow-Methods": "*",
             "Access-Control-Allow-Headers": "*",
+            "Access-Control-Allow-Credentials": "true",
         }
     )
 
@@ -100,13 +114,16 @@ async def general_exception_handler(request, exc: Exception):
     from fastapi.responses import JSONResponse
     import traceback
     logger.error(f"Unhandled exception: {exc}", exc_info=True)
+    # Get origin from request for CORS
+    origin = request.headers.get("origin", "http://localhost:3000")
     return JSONResponse(
         status_code=500,
         content={"detail": f"Internal server error: {str(exc)}"},
         headers={
-            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Origin": origin if origin in allowed_origins else "http://localhost:3000",
             "Access-Control-Allow-Methods": "*",
             "Access-Control-Allow-Headers": "*",
+            "Access-Control-Allow-Credentials": "true",
         }
     )
 

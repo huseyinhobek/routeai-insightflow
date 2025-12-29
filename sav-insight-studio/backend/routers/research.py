@@ -504,6 +504,7 @@ async def add_thread_question(
     from services.rag_service import rag_service
     from services.narration_service import narration_service
     from services.cache_service import cache_service
+    from services.decision_proxy_service import decision_proxy_service
     from models import ThreadQuestion, ThreadResult, Dataset
     
     # Get dataset version
@@ -553,8 +554,12 @@ async def add_thread_question(
         mapped_variables = routing_result.get('mapped_variables', [])
         group_by_variable_id = routing_result.get('group_by_variable_id')
         comparison_audience_id = routing_result.get('comparison_audience_id')
+        override_audience_id = routing_result.get('override_audience_id')  # Get override from router
         negation_ast = routing_result.get('negation_flags', {})
         mapping_debug_json = routing_result.get('mapping_debug_json', {})
+        
+        # Use override_audience_id if specified, otherwise use thread.audience_id
+        effective_audience_id = override_audience_id if override_audience_id is not None else thread.audience_id
         
         # Generate cache key with mode and mapped variables (router result required)
         import hashlib
@@ -562,7 +567,7 @@ async def add_thread_question(
         cache_key_parts = [
             thread.dataset_id,
             str(dataset_version),
-            thread.audience_id or '',
+            effective_audience_id or '',  # Use effective_audience_id for cache key
             normalized_question,
             mode,
             json.dumps(sorted(mapped_variables), sort_keys=True),  # Sorted for consistency
@@ -650,7 +655,54 @@ async def add_thread_question(
         response_chart_json = None
         
         # Process based on mode
-        if mode == "structured" and mapped_variables:
+        if mode == "decision_proxy":
+            # Decision proxy mode - handle normative/decision questions
+            decision_result = await decision_proxy_service.answer_decision_question(
+                db=db,
+                dataset_id=thread.dataset_id,
+                audience_id=effective_audience_id,
+                question_text=question_text,
+                router_payload=routing_result
+            )
+            
+            # Extract components from decision result
+            evidence_json = decision_result.get("evidence_json", {})
+            narrative_text = decision_result.get("narrative_text", "")
+            proxy_answer = decision_result.get("proxy_answer", {})
+            decision_rules = decision_result.get("decision_rules", [])
+            clarifying_controls = decision_result.get("clarifying_controls", {})
+            next_best_questions = decision_result.get("next_best_questions", [])
+            citations_json = decision_result.get("citations_json", [])
+            debug_json_combined = {
+                **(mapping_debug_json or {}),
+                **(decision_result.get("debug_json", {}))
+            }
+            
+            # Create thread result
+            thread_result = ThreadResult(
+                thread_question_id=thread_question.id,
+                dataset_version=dataset_version,
+                evidence_json={
+                    **evidence_json,
+                    "proxy_answer": proxy_answer,
+                    "decision_rules": decision_rules,
+                    "clarifying_controls": clarifying_controls,
+                    "next_best_questions": next_best_questions
+                },
+                narrative_text=narrative_text,
+                citations_json=citations_json,
+                mapping_debug_json=debug_json_combined,
+                model_info_json={"model": "decision_proxy"}
+            )
+            db.add(thread_result)
+            try:
+                db.commit()
+                db.refresh(thread_result)
+            except Exception as commit_error:
+                db.rollback()
+                raise commit_error
+            
+        elif mode == "structured" and mapped_variables:
             # Structured aggregation
             variable_id = mapped_variables[0]
             
@@ -671,7 +723,7 @@ async def add_thread_question(
                     variable_id=variable_id,
                     group_by_variable_id=group_by_variable_id,
                     dataset_id=thread.dataset_id,
-                    audience_id=thread.audience_id,
+                    audience_id=effective_audience_id,  # Use effective_audience_id
                     negation_ast=negation_ast
                 )
             else:
@@ -679,7 +731,7 @@ async def add_thread_question(
                     db=db,
                     variable_id=variable_id,
                     dataset_id=thread.dataset_id,
-                    audience_id=thread.audience_id,
+                    audience_id=effective_audience_id,  # Use effective_audience_id
                     negation_ast=negation_ast
                 )
             
@@ -693,6 +745,47 @@ async def add_thread_question(
             # Store chart_json for response
             response_chart_json = chart_json
             
+            # Check if variable is Tier3 (knowledge/awareness) for interpretation_disclaimer
+            interpretation_disclaimer = None
+            variable_tier = None
+            if variable:
+                from services.decision_proxy_service import decision_proxy_service
+                var_text = (variable.question_text or variable.label or variable.code or '').lower()
+                
+                # Determine tier
+                if any(kw in var_text for kw in decision_proxy_service.tier0_keywords):
+                    variable_tier = 0
+                elif any(kw in var_text for kw in decision_proxy_service.tier1_keywords):
+                    variable_tier = 1
+                elif any(kw in var_text for kw in decision_proxy_service.tier2_keywords):
+                    variable_tier = 2
+                elif any(kw in var_text for kw in decision_proxy_service.tier3_keywords):
+                    variable_tier = 3
+                
+                # For Tier3, get full copy pack
+                if variable_tier == 3:
+                    base_n = evidence_json.get('base_n', 0)
+                    interpretation_disclaimer = decision_proxy_service.get_proxy_copy(
+                        tier=3,
+                        locale='en',
+                        severity='risk',
+                        low_confidence_flag=True,
+                        base_n=base_n,
+                        top2_gap_pp=0.0
+                    )['limitation_statement']
+                    # Add to evidence_json
+                    evidence_json['interpretation_disclaimer'] = interpretation_disclaimer
+                    evidence_json['variable_tier'] = 3
+                    evidence_json['variable_tier_name'] = 'Knowledge/Awareness'
+                    evidence_json['proxy_copy'] = decision_proxy_service.get_proxy_copy(
+                        tier=3,
+                        locale='en',
+                        severity='risk',
+                        low_confidence_flag=True,
+                        base_n=base_n,
+                        top2_gap_pp=0.0
+                    )
+            
             # Generate narrative
             narrative_result = narration_service.validate_and_generate(
                 evidence_json=evidence_json,
@@ -701,6 +794,10 @@ async def add_thread_question(
             )
             
             narrative_text = narrative_result['narrative_text']
+            
+            # Add disclaimer to narrative if Tier3
+            if interpretation_disclaimer:
+                narrative_text = f"⚠️ {interpretation_disclaimer}\n\n{narrative_text}"
             
             # Create thread result
             thread_result = ThreadResult(
@@ -727,7 +824,7 @@ async def add_thread_question(
                 db=db,
                 dataset_id=thread.dataset_id,
                 question_text=question_text,
-                audience_id=thread.audience_id,
+                audience_id=effective_audience_id,  # Use effective_audience_id
                 variable_id=variable_id
             )
             
@@ -812,15 +909,27 @@ async def add_thread_question(
             raise commit_error
         
         # Prepare result response
-        result_data = {
-            "narrative_text": narrative_text,
-            "evidence_json": evidence_json,
-            "mapping_debug_json": mapping_debug_json
-        }
-        
-        # Add chart_json if it exists (structured mode only)
-        if response_chart_json is not None:
-            result_data["chart_json"] = response_chart_json
+        if mode == "decision_proxy":
+            # Decision proxy mode has special structure
+            result_data = {
+                "narrative_text": narrative_text,
+                "evidence_json": evidence_json,
+                "proxy_answer": evidence_json.get("proxy_answer", {}),
+                "decision_rules": evidence_json.get("decision_rules", []),
+                "clarifying_controls": evidence_json.get("clarifying_controls", {}),
+                "next_best_questions": evidence_json.get("next_best_questions", []),
+                "mapping_debug_json": debug_json_combined if 'debug_json_combined' in locals() else mapping_debug_json
+            }
+        else:
+            result_data = {
+                "narrative_text": narrative_text,
+                "evidence_json": evidence_json,
+                "mapping_debug_json": mapping_debug_json
+            }
+            
+            # Add chart_json if it exists (structured mode only)
+            if response_chart_json is not None:
+                result_data["chart_json"] = response_chart_json
         
         return {
             "thread_question_id": thread_question.id,

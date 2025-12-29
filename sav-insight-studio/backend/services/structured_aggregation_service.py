@@ -263,7 +263,7 @@ class StructuredAggregationService:
         if missing_label_codes:
             evidence_json["warnings"] = {
                 "missing_label_codes": list(set(missing_label_codes))  # Deduplicate
-            }
+        }
         
         return evidence_json
     

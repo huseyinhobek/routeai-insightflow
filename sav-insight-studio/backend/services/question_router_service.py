@@ -8,8 +8,9 @@ from typing import List, Dict, Any, Optional, Tuple
 import re
 import logging
 
-from models import Variable, Dataset
+from models import Variable, Dataset, Audience
 from services.embedding_service import embedding_service
+from services.intent_classification_service import intent_classification_service
 from database import DATABASE_AVAILABLE
 
 logger = logging.getLogger(__name__)
@@ -402,6 +403,81 @@ class QuestionRouterService:
         
         return None
     
+    def detect_audience_override(
+        self,
+        db: Session,
+        dataset_id: str,
+        question_text: str,
+        current_audience_id: Optional[str]
+    ) -> Optional[str]:
+        """
+        Detect if question text specifies a different audience (e.g., "for female", "for not female", "for male")
+        If detected, returns the appropriate audience_id. Returns None if no override or if total sample requested.
+        
+        Examples:
+        - "What is the distribution of QV1_1 for female respondents?" -> returns female audience_id
+        - "What is the distribution of QV1_1 for not female respondents?" -> returns None (total sample, no audience filter)
+        - "What is the distribution of QV1_1 for male respondents?" -> returns male audience_id
+        """
+        normalized = self.normalize_question(question_text)
+        
+        # Patterns to detect audience mentions in question
+        audience_patterns = {
+            'female': [r'for\s+female', r'female\s+respondents', r'females'],
+            'not_female': [r'for\s+not\s+female', r'for\s+non[\s-]?female', r'not\s+female\s+respondents'],
+            'male': [r'for\s+male', r'male\s+respondents', r'males'],
+        }
+        
+        # Check for "not female" or "non-female" first (more specific)
+        for pattern in audience_patterns['not_female']:
+            if re.search(pattern, normalized):
+                # "Not female" means total sample (no audience filter)
+                logger.info(f"Question requests 'not female' audience - using total sample (no audience filter)")
+                return None  # None means total sample
+        
+        # Check for "female"
+        for pattern in audience_patterns['female']:
+            if re.search(pattern, normalized):
+                # Try to find existing female audience in dataset
+                audiences = db.query(Audience).filter(
+                    Audience.dataset_id == dataset_id
+                ).all()
+                
+                for audience in audiences:
+                    filter_json = audience.filter_json or {}
+                    # Look for gender variable with female value
+                    for var_key in ['D1_GENDER', 'D2_GENDER', 'GENDER', 'D1_SEX', 'D2_SEX', 'SEX']:
+                        if var_key in filter_json:
+                            filter_cond = filter_json.get(var_key, {})
+                            if isinstance(filter_cond, dict):
+                                values = filter_cond.get('values', [])
+                                # Check if includes female value (usually "2" or "Female")
+                                if any(str(v).lower() in ['2', 'female', 'f'] for v in values):
+                                    logger.info(f"Found female audience: {audience.id} ({audience.name})")
+                                    return audience.id
+        
+        # Check for "male"
+        for pattern in audience_patterns['male']:
+            if re.search(pattern, normalized):
+                audiences = db.query(Audience).filter(
+                    Audience.dataset_id == dataset_id
+                ).all()
+                
+                for audience in audiences:
+                    filter_json = audience.filter_json or {}
+                    for var_key in ['D1_GENDER', 'D2_GENDER', 'GENDER', 'D1_SEX', 'D2_SEX', 'SEX']:
+                        if var_key in filter_json:
+                            filter_cond = filter_json.get(var_key, {})
+                            if isinstance(filter_cond, dict):
+                                values = filter_cond.get('values', [])
+                                # Check if includes male value (usually "1" or "Male")
+                                if any(str(v).lower() in ['1', 'male', 'm'] for v in values):
+                                    logger.info(f"Found male audience: {audience.id} ({audience.name})")
+                                    return audience.id
+        
+        # No audience override detected
+        return current_audience_id
+    
     async def route_question(
         self,
         db: Session,
@@ -413,10 +489,21 @@ class QuestionRouterService:
         Route question to appropriate mode
         
         Returns:
-            Dict with mode, mapped_variables, negation_flags, mapping_debug_json
+            Dict with mode, mapped_variables, negation_flags, mapping_debug_json, override_audience_id
         """
         if not DATABASE_AVAILABLE:
             raise ValueError("Database not available")
+        
+        # Step 0: Check if question text overrides audience
+        override_audience_id = self.detect_audience_override(
+            db=db,
+            dataset_id=dataset_id,
+            question_text=question_text,
+            current_audience_id=audience_id
+        )
+        
+        # Use override_audience_id if specified, otherwise use original audience_id
+        effective_audience_id = override_audience_id if override_audience_id != audience_id else audience_id
         
         # Step 0: Normalize
         normalized_question = self.normalize_question(question_text)
@@ -434,18 +521,98 @@ class QuestionRouterService:
         
         # Detect "vs total" comparison pattern
         comparison_audience_id = None
-        if audience_id:
+        if effective_audience_id:
             # Check if question contains "vs total" or similar patterns
             if any(pattern in normalized_question for pattern in self.vs_total_patterns):
-                comparison_audience_id = audience_id
-                logger.info(f"Comparison detected: audience {audience_id} vs total sample")
+                comparison_audience_id = effective_audience_id
+                logger.info(f"Comparison detected: audience {effective_audience_id} vs total sample")
         
-        # Step 1: Detect negation
+        # Step 0.5: CRITICAL - Check for explicit variable code FIRST
+        # If user explicitly mentions a variable code (e.g., "D1_R3 distribution"),
+        # route to structured mode regardless of decision intent detection
+        # This ensures direct variable queries are handled correctly
+        potential_var_codes = self._extract_var_codes_from_question(question_text)
+        hard_mapped_variable = None
+        if potential_var_codes:
+            for var_code in potential_var_codes:
+                variable = db.query(Variable).filter(
+                    Variable.dataset_id == dataset_id,
+                    Variable.code == var_code
+                ).first()
+                if variable:
+                    hard_mapped_variable = variable
+                    logger.info(f"Found explicit variable code in question: {var_code}, routing to structured mode")
+                    # Explicit variable code found - route to structured mode
+                    # Step 2: Detect negation
+                    negation_ast = self.detect_negation(question_text)
+                    
+                    return {
+                        "mode": "structured",
+                        "mapped_variables": [variable.id],
+                        "group_by_variable_id": group_by_variable_id,
+                        "comparison_audience_id": comparison_audience_id,
+                        "override_audience_id": override_audience_id,
+                        "negation_flags": negation_ast,
+                        "mapping_debug_json": {
+                            "hard_mapped": True,
+                            "chosen_var_code": var_code,
+                            "reason": f"Explicit variable code detected: {var_code}",
+                            "structured_intent": structured_intent,
+                            "rag_intent": rag_intent,
+                            "normalized_question": normalized_question
+                        }
+                    }
+        
+        # Step 1: Detect decision/normative intent (ONLY if no explicit variable code found)
+        # (This happens AFTER checking for explicit variable codes)
+        decision_intent_result = None
+        try:
+            decision_intent_result = intent_classification_service.detect_decision_intent(
+                question_text=question_text,
+                threshold=0.65  # 65% similarity threshold
+            )
+            decision_intent = decision_intent_result.get("is_decision_intent", False)
+            logger.info(f"Decision intent detection: {decision_intent} (method: {decision_intent_result.get('method')}, score: {decision_intent_result.get('similarity', 0):.3f})")
+        except Exception as e:
+            logger.warning(f"Error in decision intent detection, falling back to keyword-only: {e}")
+            decision_intent = False
+            decision_intent_result = {"is_decision_intent": False, "method": "error", "reason": str(e)}
+        
+        # Step 2: Check for decision intent - if detected, route to decision_proxy mode
+        # (This happens AFTER checking for explicit variable codes)
+        if decision_intent_result and decision_intent_result.get("is_decision_intent", False):
+            # Decision intent detected - route to decision_proxy mode
+            # We still try to find a proxy target variable, but don't require it
+            proxy_target_variable_id = None
+            candidate_variables = []
+            
+            # Try to find a potential target variable (optional for decision_proxy)
+            # This will be done in DecisionProxyService, but we can pre-populate here
+            # For now, return decision_proxy mode with empty variables
+            # The DecisionProxyService will handle variable identification
+            
+            return {
+                "mode": "decision_proxy",
+                "mapped_variables": [],  # Will be populated by DecisionProxyService
+                "group_by_variable_id": group_by_variable_id,
+                "comparison_audience_id": comparison_audience_id,
+                "override_audience_id": override_audience_id,
+                "negation_flags": self.detect_negation(question_text),
+                "mapping_debug_json": {
+                    "decision_intent_detected": True,
+                    "decision_intent_result": decision_intent_result,
+                    "structured_intent": structured_intent,
+                    "rag_intent": rag_intent,
+                    "normalized_question": normalized_question,
+                    "reason": f"Decision intent detected via {decision_intent_result.get('method')} method"
+                }
+            }
+        
+        # Step 3: Detect negation
         negation_ast = self.detect_negation(question_text)
         
-        # CRITICAL FIX 1: Hard-map if variable code is mentioned in question
+        # Step 4: Hard-map if variable code is mentioned in question (fallback, already checked above)
         # Extract potential var codes from question
-        potential_var_codes = self._extract_var_codes_from_question(question_text)
         
         # Check if any extracted code exists in database
         hard_mapped_variable = None
@@ -488,7 +655,7 @@ class QuestionRouterService:
                     }
                 }
         
-        # Step 2: Variable mapping (2-stage) - only if no hard-map
+        # Step 3: Variable mapping (2-stage) - only if no hard-map
         # Stage 1: Embedding-based candidate selection
         query_embedding = embedding_service.generate_embedding(question_text)
         if not query_embedding:
@@ -496,6 +663,7 @@ class QuestionRouterService:
             return {
                 "mode": "rag",
                 "mapped_variables": [],
+                "override_audience_id": override_audience_id,
                 "negation_flags": negation_ast,
                 "mapping_debug_json": {
                     "error": "Failed to generate query embedding",
@@ -516,6 +684,7 @@ class QuestionRouterService:
             return {
                 "mode": "rag",
                 "mapped_variables": [],
+                "override_audience_id": override_audience_id,
                 "negation_flags": negation_ast,
                 "mapping_debug_json": {
                     "candidates": [],
@@ -562,6 +731,7 @@ class QuestionRouterService:
                 "mapped_variables": [],
                 "group_by_variable_id": group_by_variable_id,
                 "comparison_audience_id": comparison_audience_id,
+                "override_audience_id": override_audience_id,
                 "negation_flags": negation_ast,
                 "mapping_debug_json": {
                     "candidates": [],
@@ -622,6 +792,8 @@ class QuestionRouterService:
             "mode_selected": mode,
             "structured_intent": structured_intent,
             "rag_intent": rag_intent,
+            "decision_intent": decision_intent_result.get("has_decision_intent", False) if decision_intent_result else False,
+            "decision_intent_result": decision_intent_result if decision_intent_result else None,
             "hard_mapped": False,
             "normalized_question": normalized_question,
         }

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { MessageCircle, Send, Loader2, Sparkles, BarChart3, ArrowLeft, Lightbulb, Users } from 'lucide-react';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
+import { MessageCircle, Send, Loader2, Sparkles, BarChart3, ArrowLeft, Lightbulb, Users, CheckCircle2, AlertCircle, TrendingUp } from 'lucide-react';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, PieChart, Pie, Cell } from 'recharts';
 import apiService from '../services/apiService';
 
 interface ThreadQuestion {
@@ -19,6 +19,10 @@ interface ThreadQuestion {
     chart_json?: any;
     mapping_debug_json?: any;
     created_at?: string;
+    proxy_answer?: any;
+    decision_rules?: any[];
+    clarifying_controls?: any;
+    next_best_questions?: string[];
   };
 }
 
@@ -50,6 +54,9 @@ const ThreadChatPage: React.FC = () => {
   const [suggestedQuestions, setSuggestedQuestions] = useState<Record<string, SuggestedQuestion[]>>({});
   const [showSuggested, setShowSuggested] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const [selectedDecisionRule, setSelectedDecisionRule] = useState<Record<number, string>>({});
+  const [decisionGoal, setDecisionGoal] = useState<Record<number, string>>({});
+  const [confidenceThreshold, setConfidenceThreshold] = useState<Record<number, number>>({});
 
   useEffect(() => {
     if (threadId) {
@@ -139,6 +146,23 @@ const ThreadChatPage: React.FC = () => {
 
   const handleSuggestedQuestion = (questionText: string) => {
     setInput(questionText);
+  };
+
+  const handleNextBestQuestion = async (questionText: string) => {
+    if (!threadId || submitting) return;
+    
+    setInput('');
+    setSubmitting(true);
+
+    try {
+      await apiService.addThreadQuestion(threadId, questionText);
+      await loadThread(false);
+    } catch (err: any) {
+      setError(err.message || 'Soru gönderilirken hata oluştu');
+      console.error('Error sending question:', err);
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const handleKeyPress = (e: React.KeyboardEvent) => {
@@ -239,6 +263,389 @@ const ThreadChatPage: React.FC = () => {
     );
   };
 
+  const renderDecisionProxy = (question: ThreadQuestion) => {
+    if (!question.result || question.mode !== 'decision_proxy') return null;
+
+    const evidence = question.result.evidence_json || {};
+    const proxyAnswer = evidence.proxy_answer || {};
+    const decisionRules = evidence.decision_rules || [];
+    const clarifyingControls = evidence.clarifying_controls || {};
+    const nextBestQuestions = evidence.next_best_questions || [];
+    const distribution = evidence.distribution;
+    const comparison = evidence.comparison;
+
+    // Debug: Log to console to verify data structure
+    console.log('Decision Proxy Data:', {
+      hasEvidence: !!evidence,
+      hasProxyAnswer: !!proxyAnswer,
+      decisionRulesCount: decisionRules.length,
+      hasClarifyingControls: Object.keys(clarifyingControls).length > 0,
+      nextBestQuestionsCount: nextBestQuestions.length,
+      hasDistribution: !!distribution,
+      hasComparison: !!comparison,
+      evidenceKeys: Object.keys(evidence)
+    });
+
+    const questionId = question.id;
+    const currentRule = selectedDecisionRule[questionId] || '';
+    const currentGoal = decisionGoal[questionId] || clarifyingControls.decision_goal?.default || 'cost';
+    const currentConfidence = confidenceThreshold[questionId] || clarifyingControls.confidence_threshold?.default || 60;
+
+    const proxyHeader = proxyAnswer.proxy_header || {};
+    const proxyCopy = proxyAnswer.proxy_copy || {};
+    const isProxy = proxyHeader.is_proxy || false;
+    const proxyVarCode = proxyHeader.proxy_var_code;
+    const proxyConfidence = proxyHeader.confidence;
+    const proxyTier = proxyHeader.tier;
+    const proxyTierName = proxyHeader.tier_name || proxyCopy.tier_name;
+    const alternatives = proxyHeader.alternatives || [];
+    
+    // Get copy fields (with fallbacks)
+    const bannerTitle = proxyCopy.banner_title || proxyHeader.message || "Not directly measured → using proxy";
+    const limitationStatement = proxyCopy.limitation_statement || "Using proxy variable";
+    const whatWeCannotClaim = proxyCopy.what_we_cannot_claim || [];
+    const severity = proxyCopy.severity || 'info';
+    
+    // Tier badge colors
+    const getTierBadgeColor = (tier: number | undefined) => {
+      if (tier === 0) return 'bg-green-100 text-green-800 border-green-300';
+      if (tier === 1) return 'bg-blue-100 text-blue-800 border-blue-300';
+      if (tier === 2) return 'bg-yellow-100 text-yellow-800 border-yellow-300';
+      if (tier === 3) return 'bg-orange-100 text-orange-800 border-orange-300';
+      return 'bg-gray-100 text-gray-800 border-gray-300';
+    };
+    
+    const getTierLabel = (tier: number | undefined) => {
+      if (tier === 0) return 'Tier0: Direct';
+      if (tier === 1) return 'Tier1: Behavioral';
+      if (tier === 2) return 'Tier2: Attitudinal';
+      if (tier === 3) return 'Tier3: Knowledge';
+      return 'Unknown Tier';
+    };
+    
+    // Severity-based styling
+    const getSeverityStyles = (sev: string) => {
+      if (sev === 'risk') return 'bg-red-50 border-l-4 border-red-500';
+      if (sev === 'warn') return 'bg-orange-50 border-l-4 border-orange-500';
+      return 'bg-blue-50 border-l-4 border-blue-500';
+    };
+    
+    const getSeverityIconColor = (sev: string) => {
+      if (sev === 'risk') return 'text-red-600';
+      if (sev === 'warn') return 'text-orange-600';
+      return 'text-blue-600';
+    };
+
+    return (
+      <div className="space-y-4">
+        {/* Measurement Boundary Banner */}
+        {isProxy && (
+          <div className={`${getSeverityStyles(severity)} p-4 rounded-r-lg`}>
+            <div className="flex items-start gap-2">
+              <AlertCircle className={`w-5 h-5 ${getSeverityIconColor(severity)} flex-shrink-0 mt-0.5`} />
+              <div className="flex-1">
+                {/* Banner Title + Tier Badge */}
+                <div className="flex items-center gap-2 mb-2 flex-wrap">
+                  <p className={`text-sm font-semibold ${severity === 'risk' ? 'text-red-900' : severity === 'warn' ? 'text-orange-900' : 'text-blue-900'}`}>
+                    {bannerTitle}
+                  </p>
+                  {proxyTier !== undefined && (
+                    <span className={`text-xs px-2 py-0.5 rounded border ${getTierBadgeColor(proxyTier)}`}>
+                      {getTierLabel(proxyTier)}
+                    </span>
+                  )}
+                  {proxyConfidence !== undefined && (
+                    <span className="text-xs text-gray-600">
+                      (confidence: {(proxyConfidence * 100).toFixed(0)}%)
+                    </span>
+                  )}
+                </div>
+                
+                {/* Proxy Variable Info */}
+                {proxyVarCode && (
+                  <p className={`text-xs ${severity === 'risk' ? 'text-red-700' : severity === 'warn' ? 'text-orange-700' : 'text-blue-700'} mb-2`}>
+                    Proxy variable: <span className="font-mono font-semibold">{proxyVarCode}</span>
+                  </p>
+                )}
+                
+                {/* Limitation Statement (Always Visible) */}
+                <p className={`text-sm ${severity === 'risk' ? 'text-red-800' : severity === 'warn' ? 'text-orange-800' : 'text-blue-800'} mb-3 font-medium`}>
+                  {limitationStatement}
+                </p>
+                
+                {/* What We Cannot Claim (Expandable) */}
+                {whatWeCannotClaim.length > 0 && (
+                  <details className="mb-2">
+                    <summary className="text-xs font-medium cursor-pointer hover:underline mb-1">
+                      What we cannot claim
+                    </summary>
+                    <ul className="list-disc list-inside text-xs space-y-1 mt-1 ml-2">
+                      {whatWeCannotClaim.map((claim: string, idx: number) => (
+                        <li key={idx} className={severity === 'risk' ? 'text-red-700' : severity === 'warn' ? 'text-orange-700' : 'text-blue-700'}>
+                          {claim}
+                        </li>
+                      ))}
+                    </ul>
+                  </details>
+                )}
+                
+                {/* Alternatives */}
+                {alternatives.length > 0 && (
+                  <div className="mt-2">
+                    <p className={`text-xs ${severity === 'risk' ? 'text-red-600' : severity === 'warn' ? 'text-orange-600' : 'text-blue-600'} mb-1`}>Alternative proxies:</p>
+                    <div className="flex flex-wrap gap-2">
+                      {alternatives.map((alt: any, idx: number) => (
+                        <span key={idx} className={`text-xs px-2 py-1 rounded font-mono border ${getTierBadgeColor(alt.tier)}`}>
+                          {alt.var_code} (Tier{alt.tier}, {(alt.confidence * 100).toFixed(0)}%)
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Narrative */}
+        {question.result.narrative_text && (
+          <div className="bg-blue-50 border-l-4 border-blue-500 p-4 rounded-r-lg">
+            <p className="text-sm text-gray-900 whitespace-pre-wrap">
+              {question.result.narrative_text}
+            </p>
+          </div>
+        )}
+
+        {/* What We Can Measure - Show if distribution or comparison exists */}
+        {(distribution || comparison) && (
+          <div className="bg-gray-50 rounded-lg p-4">
+            <h3 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
+              <BarChart3 className="w-5 h-5 text-purple-600" />
+              Ne Ölçebiliriz?
+            </h3>
+            <div className="space-y-4">
+              {/* Distribution Chart */}
+              {distribution && distribution.categories && (
+                <div>
+                  <h4 className="text-sm font-medium text-gray-700 mb-2">Dağılım</h4>
+                  <div className="bg-white rounded-lg p-4">
+                    <ResponsiveContainer width="100%" height={300}>
+                      <BarChart data={distribution.categories.map((cat: any) => ({
+                        label: cat.label,
+                        value: cat.percent,
+                        count: cat.count
+                      }))}>
+                        <CartesianGrid strokeDasharray="3 3" />
+                        <XAxis dataKey="label" angle={-45} textAnchor="end" height={100} />
+                        <YAxis />
+                        <Tooltip />
+                        <Bar dataKey="value" fill="#9333ea" radius={[4, 4, 0, 0]}>
+                          {distribution.categories.map((_: any, index: number) => (
+                            <Cell key={`cell-${index}`} fill={`rgba(147, 51, 234, ${0.6 + (index * 0.1)})`} />
+                          ))}
+                        </Bar>
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                </div>
+              )}
+
+              {/* Comparison Chart */}
+              {comparison && comparison.comparison_type === 'audience_vs_total' && (
+                <div>
+                  <h4 className="text-sm font-medium text-gray-700 mb-2">Audience vs Total Karşılaştırması</h4>
+                  <div className="bg-white rounded-lg p-4">
+                    {comparison.delta_pp && comparison.delta_pp.length > 0 && (
+                      <div className="space-y-2 mb-4">
+                        {comparison.delta_pp.map((delta: any, idx: number) => (
+                          <div key={idx} className="flex items-center justify-between p-2 bg-gray-50 rounded">
+                            <span className="text-sm text-gray-700">{delta.option}</span>
+                            <div className="flex items-center gap-4">
+                              <span className="text-xs text-gray-500">Audience: {delta.audience_percent.toFixed(1)}%</span>
+                              <span className="text-xs text-gray-500">Total: {delta.overall_percent.toFixed(1)}%</span>
+                              <span className={`text-sm font-semibold ${delta.diff_pp >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                                {delta.diff_pp >= 0 ? '+' : ''}{delta.diff_pp.toFixed(1)}pp
+                              </span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    {comparison.audience && comparison.total && (
+                      <ResponsiveContainer width="100%" height={300}>
+                        <BarChart data={comparison.audience.categories?.map((cat: any, idx: number) => {
+                          const totalCat = comparison.total.categories?.find((tc: any) => tc.label === cat.label);
+                          return {
+                            label: cat.label,
+                            audience: cat.percent,
+                            total: totalCat?.percent || 0
+                          };
+                        }) || []}>
+                          <CartesianGrid strokeDasharray="3 3" />
+                          <XAxis dataKey="label" angle={-45} textAnchor="end" height={100} />
+                          <YAxis />
+                          <Tooltip />
+                          <Legend />
+                          <Bar dataKey="audience" fill="#3b82f6" name="Audience" radius={[4, 4, 0, 0]} />
+                          <Bar dataKey="total" fill="#ef4444" name="Total" radius={[4, 4, 0, 0]} />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Decision Rules */}
+        {decisionRules.length > 0 && (
+          <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+            <h3 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
+              <AlertCircle className="w-5 h-5 text-yellow-600" />
+              Karar Kuralları (Varsayımlar)
+            </h3>
+            <p className="text-xs text-gray-600 mb-4">
+              Lütfen bir karar kuralı seçin. Her kural farklı bir varsayıma dayanır.
+            </p>
+            <div className="space-y-3">
+              {decisionRules.map((rule: any) => (
+                <label
+                  key={rule.id}
+                  className={`block p-3 border-2 rounded-lg cursor-pointer transition-all ${
+                    currentRule === rule.id
+                      ? 'border-purple-500 bg-purple-50'
+                      : 'border-gray-200 bg-white hover:border-purple-300'
+                  }`}
+                >
+                  <div className="flex items-start gap-3">
+                    <input
+                      type="radio"
+                      name={`decision-rule-${questionId}`}
+                      value={rule.id}
+                      checked={currentRule === rule.id}
+                      onChange={(e) => setSelectedDecisionRule({ ...selectedDecisionRule, [questionId]: e.target.value })}
+                      className="mt-1"
+                    />
+                    <div className="flex-1">
+                      <div className="font-medium text-gray-900 mb-1">{rule.title}</div>
+                      <div className="text-xs text-gray-600 mb-2">{rule.assumption}</div>
+                      <div className="text-xs text-gray-500 mb-2">
+                        <strong>Nasıl uygulanır:</strong> {rule.how_to_apply}
+                      </div>
+                      {rule.result_preview && (
+                        <div className="mt-2 p-2 bg-gray-100 rounded text-xs">
+                          <strong>Önizleme:</strong>{' '}
+                          {rule.result_preview.top_option && (
+                            <span className="text-purple-600 font-semibold">
+                              {rule.result_preview.top_option}
+                            </span>
+                          )}
+                          {rule.result_preview.supporting_metric && (
+                            <span className="text-gray-600 ml-2">
+                              ({rule.result_preview.supporting_metric})
+                            </span>
+                          )}
+                          {rule.result_preview.recommendation && (
+                            <span className="text-purple-600 font-semibold">
+                              {rule.result_preview.recommendation}
+                            </span>
+                          )}
+                          {rule.result_preview.lift_pp && (
+                            <span className="text-green-600 ml-2">
+                              {rule.result_preview.lift_pp}
+                            </span>
+                          )}
+                          {rule.result_preview.warning && (
+                            <span className="text-orange-600 ml-2 text-xs">
+                              ⚠️ {rule.result_preview.warning}
+                            </span>
+                          )}
+                          {rule.result_preview.reason && (
+                            <span className="text-gray-500 ml-2 text-xs">
+                              ({rule.result_preview.reason})
+                            </span>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </label>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Clarifying Controls */}
+        {clarifyingControls && Object.keys(clarifyingControls).length > 0 && (
+          <div className="bg-gray-50 rounded-lg p-4">
+            <h3 className="font-semibold text-gray-900 mb-3">Karar Kriterleri</h3>
+            <div className="space-y-4">
+              {clarifyingControls.decision_goal && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    {clarifyingControls.decision_goal.label}
+                  </label>
+                  <select
+                    value={currentGoal}
+                    onChange={(e) => setDecisionGoal({ ...decisionGoal, [questionId]: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
+                  >
+                    {clarifyingControls.decision_goal.options?.map((opt: any) => (
+                      <option key={opt.id} value={opt.id}>
+                        {opt.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+              {clarifyingControls.confidence_threshold && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    {clarifyingControls.confidence_threshold.label}: {currentConfidence}%
+                  </label>
+                  <input
+                    type="range"
+                    min={clarifyingControls.confidence_threshold.min}
+                    max={clarifyingControls.confidence_threshold.max}
+                    step={clarifyingControls.confidence_threshold.step}
+                    value={currentConfidence}
+                    onChange={(e) => setConfidenceThreshold({ ...confidenceThreshold, [questionId]: parseInt(e.target.value) })}
+                    className="w-full"
+                  />
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Next Best Questions */}
+        {nextBestQuestions && nextBestQuestions.length > 0 && (
+          <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+            <h3 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
+              <TrendingUp className="w-5 h-5 text-green-600" />
+              Önerilen Takip Soruları
+            </h3>
+            <p className="text-xs text-gray-600 mb-3">
+              Bu sorular cevabı daha ölçülebilir hale getirebilir:
+            </p>
+            <div className="space-y-2">
+              {nextBestQuestions.map((q: string, idx: number) => (
+                <button
+                  key={idx}
+                  onClick={() => handleNextBestQuestion(q)}
+                  className="w-full text-left px-3 py-2 text-sm bg-white hover:bg-green-100 border border-green-200 hover:border-green-400 rounded-lg transition-colors"
+                >
+                  {q}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
@@ -304,7 +711,18 @@ const ThreadChatPage: React.FC = () => {
               <p>Henüz soru eklenmemiş. İlk sorunuzu sorun!</p>
             </div>
           ) : (
-            thread.questions.map((question) => (
+            thread.questions.map((question) => {
+              // AGGRESSIVE DEBUG - Log EVERY question
+              console.log('🚀 RENDERING QUESTION:', {
+                id: question.id,
+                text: question.question_text,
+                mode: question.mode,
+                modeType: typeof question.mode,
+                hasResult: !!question.result,
+                status: question.status
+              });
+              
+              return (
               <div key={question.id} className="space-y-4">
                 {/* User Question */}
                 <div className="flex justify-end">
@@ -325,34 +743,124 @@ const ThreadChatPage: React.FC = () => {
                   <div className="flex justify-start">
                     <div className="max-w-3xl w-full">
                       <div className="bg-gray-100 rounded-2xl px-4 py-3">
-                        {question.result.narrative_text && (
-                          <div className="mb-3">
-                            <p className="text-sm text-gray-900 whitespace-pre-wrap">
-                              {question.result.narrative_text}
-                            </p>
-                          </div>
-                        )}
-                        {question.result.chart_json && renderChart(question.result.chart_json)}
-                        {question.result.evidence_json && (
-                          <details className="mt-3">
-                            <summary className="text-xs text-gray-600 cursor-pointer hover:text-gray-900 font-medium">
-                              📊 Evidence Details
-                            </summary>
-                            <div className="mt-2 text-xs bg-gray-50 p-3 rounded overflow-x-auto">
-                              <pre className="whitespace-pre-wrap">{JSON.stringify(question.result.evidence_json, null, 2)}</pre>
-                            </div>
-                          </details>
-                        )}
-                        {question.result.mapping_debug_json && (
-                          <details className="mt-3">
-                            <summary className="text-xs text-gray-600 cursor-pointer hover:text-gray-900 font-medium">
-                              🔍 Mapping Debug
-                            </summary>
-                            <div className="mt-2 text-xs bg-gray-50 p-3 rounded overflow-x-auto">
-                              <pre className="whitespace-pre-wrap">{JSON.stringify(question.result.mapping_debug_json, null, 2)}</pre>
-                            </div>
-                          </details>
-                        )}
+                        {/* Decision Proxy Mode */}
+                        {(() => {
+                          // Debug: Log question data - ALWAYS log
+                          console.log('🔍 Question data:', {
+                            questionId: question.id,
+                            mode: question.mode,
+                            modeType: typeof question.mode,
+                            modeValue: JSON.stringify(question.mode),
+                            hasResult: !!question.result,
+                            resultKeys: question.result ? Object.keys(question.result) : [],
+                            evidenceJsonKeys: question.result?.evidence_json ? Object.keys(question.result.evidence_json) : [],
+                            fullQuestion: question
+                          });
+                          
+                          // Check mode with multiple variations
+                          const isDecisionProxy = 
+                            question.mode === 'decision_proxy' ||
+                            question.mode === 'decision-proxy' ||
+                            String(question.mode).toLowerCase() === 'decision_proxy' ||
+                            String(question.mode).toLowerCase() === 'decision-proxy';
+                          
+                          console.log('🔍 Mode check:', {
+                            mode: question.mode,
+                            isDecisionProxy,
+                            check1: question.mode === 'decision_proxy',
+                            check2: question.mode === 'decision-proxy',
+                            check3: String(question.mode).toLowerCase() === 'decision_proxy'
+                          });
+                          
+                          if (isDecisionProxy) {
+                            console.log('✅ Rendering decision_proxy mode');
+                            return renderDecisionProxy(question);
+                          } else {
+                            console.log('❌ Rendering non-decision_proxy mode:', question.mode);
+                            
+                            // Check for Tier3 disclaimer in structured mode
+                            const evidence = question.result.evidence_json || {};
+                            const interpretationDisclaimer = evidence.interpretation_disclaimer;
+                            const variableTier = evidence.variable_tier;
+                            const proxyCopy = evidence.proxy_copy;
+                            
+                            return (
+                          <>
+                            {/* Tier3 Disclaimer for Structured Mode */}
+                            {interpretationDisclaimer && variableTier === 3 && (
+                              <div className="bg-red-50 border-l-4 border-red-500 p-4 rounded-r-lg mb-3">
+                                <div className="flex items-start gap-2">
+                                  <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
+                                  <div className="flex-1">
+                                    <p className="text-sm font-semibold text-red-900 mb-1">
+                                      {proxyCopy?.banner_title || "Using awareness/knowledge as preference proxy"}
+                                    </p>
+                                    <p className="text-sm text-red-800 font-medium mb-2">
+                                      {interpretationDisclaimer}
+                                    </p>
+                                    {proxyCopy && proxyCopy.what_we_cannot_claim && proxyCopy.what_we_cannot_claim.length > 0 && (
+                                      <details className="mt-2">
+                                        <summary className="text-xs font-medium cursor-pointer hover:underline mb-1">
+                                          What we cannot claim
+                                        </summary>
+                                        <ul className="list-disc list-inside text-xs space-y-1 mt-1 ml-2">
+                                          {proxyCopy.what_we_cannot_claim.map((claim: string, idx: number) => (
+                                            <li key={idx} className="text-red-700">
+                                              {claim}
+                                            </li>
+                                          ))}
+                                        </ul>
+                                      </details>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+                            )}
+                            
+                            {question.result.narrative_text && (
+                              <div className="mb-3">
+                                <p className="text-sm text-gray-900 whitespace-pre-wrap">
+                                  {question.result.narrative_text}
+                                </p>
+                              </div>
+                            )}
+                            {question.result.chart_json && renderChart(question.result.chart_json)}
+                            {question.result.evidence_json && (
+                              <details className="mt-3">
+                                <summary className="text-xs text-gray-600 cursor-pointer hover:text-gray-900 font-medium">
+                                  📊 Evidence Details
+                                </summary>
+                                <div className="mt-2 text-xs bg-gray-50 p-3 rounded overflow-x-auto">
+                                  <pre className="whitespace-pre-wrap">{JSON.stringify(question.result.evidence_json, null, 2)}</pre>
+                                </div>
+                              </details>
+                            )}
+                            {question.result.mapping_debug_json && (
+                              <details className="mt-3">
+                                <summary className="text-xs text-gray-600 cursor-pointer hover:text-gray-900 font-medium">
+                                  🔍 Mapping Debug
+                                </summary>
+                                <div className="mt-2 text-xs bg-gray-50 p-3 rounded overflow-x-auto">
+                                  {/* One-line summary at top */}
+                                  <div className="mb-3 p-2 bg-gray-100 rounded text-xs font-medium">
+                                    {(() => {
+                                      const debug = question.result.mapping_debug_json || {};
+                                      const mode = debug.mode_selected || debug.reason || 'unknown';
+                                      const varCode = debug.chosen_var_code || debug.proxy_var_code || 'N/A';
+                                      const confidence = debug.proxy_confidence !== undefined 
+                                        ? `${(debug.proxy_confidence * 100).toFixed(0)}%` 
+                                        : 'N/A';
+                                      return `Mode: ${mode} | Variable: ${varCode} | Confidence: ${confidence}`;
+                                    })()}
+                                  </div>
+                                  <pre className="whitespace-pre-wrap">{JSON.stringify(question.result.mapping_debug_json, null, 2)}</pre>
+                                </div>
+                              </details>
+                            )}
+                          </>
+                            );
+                          }
+                        })()}
                       </div>
                       <p className="text-xs text-gray-500 mt-1">
                         {question.result.created_at &&
@@ -377,7 +885,8 @@ const ThreadChatPage: React.FC = () => {
                   </div>
                 ) : null}
               </div>
-            ))
+              );
+            })
           )}
           <div ref={messagesEndRef} />
         </div>
