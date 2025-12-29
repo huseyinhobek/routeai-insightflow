@@ -1001,28 +1001,28 @@ class DecisionProxyService:
         if proxy_target_variable_id:
             tier_label = proxy_tier_name or f"Tier{proxy_tier}" if proxy_tier is not None else "Unknown"
             narrative_parts.append(
-                f"⚠️ Your question is not directly measured in this dataset. "
-                f"Using proxy variable: {proxy_var_code} ({tier_label}, confidence: {proxy_confidence:.0%})."
+                f"⚠️ Sorunuz bu veri setinde doğrudan ölçülmüyor. "
+                f"Proxy değişken kullanılıyor: {proxy_var_code} ({tier_label}, güven: %{proxy_confidence:.0f})."
             )
             
             # Stronger warning for Tier3
             if proxy_tier == 3:
                 narrative_parts.append(
-                    "⚠️ WARNING: This proxy measures knowledge/awareness, NOT preference. "
-                    "Familiarity does not equal preference."
+                    "⚠️ UYARI: Bu proxy bilgi/farkındalığı ölçer, tercihi DEĞİL. "
+                    "Tanıdıklık tercih anlamına gelmez."
                 )
             
             if alternative_candidates:
                 alt_codes = [alt.get('var_code') for alt in alternative_candidates[:2]]
                 if alt_codes:
-                    narrative_parts.append(f"Alternative proxies: {', '.join(alt_codes)}.")
+                    narrative_parts.append(f"Alternatif proxy'ler: {', '.join(alt_codes)}.")
         
-        narrative_parts.append("Here is what we can measure:")
+        narrative_parts.append("Ölçebildiklerimiz:")
         
         # Add "what we cannot measure" if applicable
         if proxy_answer.get("what_we_cannot_measure"):
             narrative_parts.append(
-                f"Cannot measure: {', '.join(proxy_answer['what_we_cannot_measure'])}."
+                f"Ölçülemez: {', '.join(proxy_answer['what_we_cannot_measure'])}."
             )
         
         if proxy_target_variable_id and distribution_evidence:
@@ -1033,8 +1033,8 @@ class DecisionProxyService:
             if categories:
                 top_cat = categories[0]
                 narrative_parts.append(
-                    f"Distribution: '{top_cat.get('label')}' was selected by {top_cat.get('percent', 0):.1f}% "
-                    f"({top_cat.get('count', 0)} out of {answered_n}, base N={base_n})."
+                    f"Dağılım: '{top_cat.get('label')}' katılımcıların %{top_cat.get('percent', 0):.1f}'i tarafından seçildi "
+                    f"({answered_n} kişiden {top_cat.get('count', 0)} kişi, temel N={base_n})."
                 )
         
         if comparison_evidence and evidence_json.get("comparison", {}).get("delta_pp"):
@@ -1042,17 +1042,17 @@ class DecisionProxyService:
             if delta_pp:
                 max_lift = max(delta_pp, key=lambda x: x.get('diff_pp', 0))
                 narrative_parts.append(
-                    f"Comparison: '{max_lift.get('option')}' shows {max_lift.get('diff_pp', 0):+.1f}pp "
-                    f"difference vs total sample."
+                    f"Karşılaştırma: '{max_lift.get('option')}' toplam örneğe göre {max_lift.get('diff_pp', 0):+.1f} yüzde puanı "
+                    f"fark gösteriyor."
                 )
         
         narrative_parts.append(
-            "To make a decision, please select a decision rule below. "
-            "Each rule represents a different assumption about what makes a choice 'best'."
+            "Karar vermek için lütfen aşağıdan bir karar kuralı seçin. "
+            "Her kural, bir seçimin 'en iyi' olmasını sağlayan şey hakkında farklı bir varsayımı temsil eder."
         )
         
         narrative_text = " ".join(narrative_parts) if narrative_parts else (
-            "This is a decision-oriented question. Please select a decision rule to see a recommendation."
+            "Bu karar odaklı bir sorudur. Lütfen bir öneri görmek için bir karar kuralı seçin."
         )
         
         return {

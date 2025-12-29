@@ -367,7 +367,7 @@ class NarrationService:
             
             if not cells:
                 return {
-                    'summary': f'Breakdown analysis of {answered_n} responses.',
+                    'summary': f'{answered_n} cevabın çapraz analizi.',
                     'key_points': [],
                     'caveats': [],
                     'evidence_recap': {}
@@ -404,7 +404,7 @@ class NarrationService:
                     percent_of_col = top_cell.get('percent_of_col_valid', 0)
                     
                     narrative_parts.append(
-                        f"For {col_label}, '{row_label}' was the most common response ({count} responses, {percent_of_col:.1f}% of {col_label})."
+                        f"{col_label} için, '{row_label}' en yaygın cevap oldu ({count} cevap, {col_label}'in %{percent_of_col:.1f}'i)."
                     )
             
             # Add summary about breakdown structure
@@ -412,26 +412,26 @@ class NarrationService:
             unique_rows = len(set(cell.get('row_label') for cell in cells))
             
             narrative_parts.append(
-                f"Breakdown analysis shows {unique_rows} response categories across {unique_cols} {group_by_var_code} groups."
+                f"Çapraz analiz, {unique_cols} {group_by_var_code} grubu arasında {unique_rows} cevap kategorisi gösteriyor."
             )
             
             return {
-                'summary': ' '.join(narrative_parts) if narrative_parts else f'Breakdown analysis of {answered_n} responses.',
+                'summary': ' '.join(narrative_parts) if narrative_parts else f'{answered_n} cevabın çapraz analizi.',
                 'key_points': [
                     {
-                        'text': f'Primary variable: {primary_var_code}',
+                        'text': f'Ana değişken: {primary_var_code}',
                         'evidence_ref': {'primary_variable_code': primary_var_code}
                     },
                     {
-                        'text': f'Grouped by: {group_by_var_code}',
+                        'text': f'Gruplandırma: {group_by_var_code}',
                         'evidence_ref': {'group_by_variable_code': group_by_var_code}
                     },
                     {
-                        'text': f'Total responses: {answered_n}',
+                        'text': f'Toplam cevap: {answered_n}',
                         'evidence_ref': {'answered_n': answered_n}
                     }
                 ],
-                'caveats': [f'Breakdown shows cross-tabulation of {primary_var_code} by {group_by_var_code}'],
+                'caveats': [f'Çapraz analiz {primary_var_code} değişkeninin {group_by_var_code} değişkenine göre çapraz tablosunu gösteriyor'],
                 'evidence_recap': {
                     'base_n': base_n,
                     'answered_n': answered_n,
@@ -455,7 +455,7 @@ class NarrationService:
             
             if not audience_categories or not total_categories:
                 return {
-                    'summary': 'Comparison data not available.',
+                    'summary': 'Karşılaştırma verisi mevcut değil.',
                     'key_points': [],
                     'caveats': [],
                     'evidence_recap': {}
@@ -472,15 +472,15 @@ class NarrationService:
                 diff = audience_pct - total_pct
                 
                 narrative_parts.append(
-                    f"For {audience_top.get('label', 'top category')}, "
-                    f"the audience shows {audience_pct:.1f}% compared to {total_pct:.1f}% in the total sample "
-                    f"({'higher' if diff > 0 else 'lower'} by {abs(diff):.1f} percentage points)."
+                    f"{audience_top.get('label', 'en üst kategori')} için, "
+                    f"hedef kitle %{audience_pct:.1f} gösterirken toplam örnekte %{total_pct:.1f} "
+                    f"({abs(diff):.1f} yüzde puanı {'daha yüksek' if diff > 0 else 'daha düşük'})."
                 )
             
             return {
-                'summary': ' '.join(narrative_parts) if narrative_parts else 'Comparison completed.',
+                'summary': ' '.join(narrative_parts) if narrative_parts else 'Karşılaştırma tamamlandı.',
                 'key_points': [],
-                'caveats': [f"Audience sample size: {audience_base_n}, Total sample size: {total_base_n}"],
+                'caveats': [f"Hedef kitle örnek boyutu: {audience_base_n}, Toplam örnek boyutu: {total_base_n}"],
                 'evidence_recap': {
                     'audience_base_n': audience_base_n,
                     'total_base_n': total_base_n,
@@ -517,19 +517,19 @@ class NarrationService:
             
             # Build narrative using these exact string values
             narrative_parts.append(
-                f"{cat_label} was selected by {cat_percent_str}% of respondents ({cat_count_str} out of {answered_n_str})."
+                f"{cat_label}, katılımcıların %{cat_percent_str}'i tarafından seçildi ({answered_n_str} kişiden {cat_count_str} kişi)."
             )
         
-        narrative_text = " ".join(narrative_parts) if narrative_parts else f"Analysis of {answered_n_str} responses."
+        narrative_text = " ".join(narrative_parts) if narrative_parts else f"{answered_n_str} cevabın analizi."
         
         # Build key_points using injected numbers
         key_points = [
             {
-                "text": f"Base sample size: {base_n_str}",
+                "text": f"Temel örnek boyutu: {base_n_str}",
                 "evidence_ref": {"base_n": base_n}
             },
             {
-                "text": f"Response rate: {response_rate_str}%",
+                "text": f"Cevap oranı: %{response_rate_str}",
                 "evidence_ref": {"response_rate": response_rate}
             }
         ]
@@ -554,8 +554,8 @@ class NarrationService:
             "key_points": key_points,
             "quantifiers": [],
             "caveats": [
-                f"Response rate: {response_rate_str}%",
-                f"Missing responses: {missing_n_str}"
+                f"Cevap oranı: %{response_rate_str}",
+                f"Eksik cevaplar: {missing_n_str}"
             ],
             "evidence_recap": {
                 "base_n": base_n,
@@ -595,10 +595,10 @@ class NarrationService:
             narrative_parts = []
             for theme in themes:
                 narrative_parts.append(f"{theme.get('description', '')}: {theme.get('support_count', 0)} responses")
-            narrative_text = ". ".join(narrative_parts) if narrative_parts else f"Found {len(citations)} relevant responses."
+            narrative_text = ". ".join(narrative_parts) if narrative_parts else f"{len(citations)} ilgili cevap bulundu."
             caveats = [
-                "Results are based on retrieved sample, not population percentages",
-                f"Sample size: {len(citations)}"
+                "Sonuçlar alınan örneğe dayanmaktadır, nüfus yüzdelerine değil",
+                f"Örnek boyutu: {len(citations)}"
             ]
         
         return {
@@ -653,7 +653,7 @@ class NarrationService:
         
         if all_errors:
             return {
-                "narrative_text": "Data mismatch—unable to generate safe narrative.",
+                "narrative_text": "Veri uyumsuzluğu—güvenli anlatı oluşturulamadı.",
                 "errors": all_errors,
                 "is_valid": False,
                 "original_narrative": narrative_text

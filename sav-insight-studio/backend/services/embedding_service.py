@@ -3,7 +3,7 @@ Embedding service for creating and retrieving vector embeddings
 Uses OpenAI text-embedding models and pgvector for storage/retrieval
 """
 from sqlalchemy.orm import Session
-from sqlalchemy import text, and_
+from sqlalchemy import text, and_, not_, exists
 from typing import List, Dict, Any, Optional, Tuple
 import logging
 import json
@@ -511,36 +511,70 @@ class EmbeddingService:
         limit: Optional[int] = None
     ) -> Dict[str, int]:
         """
-        Generate embeddings for all utterances in a dataset
+        Generate embeddings for all utterances in a dataset that don't already have embeddings
         
         Returns:
-            Dict with counts: {'embeddings': int, 'errors': int}
+            Dict with counts: {'embeddings': int, 'errors': int, 'skipped': int}
         """
         if not DATABASE_AVAILABLE:
-            return {'embeddings': 0, 'errors': 0}
+            return {'embeddings': 0, 'errors': 0, 'skipped': 0}
         
         embeddings_created = 0
         errors = 0
+        skipped = 0
         
         try:
+            # Only get utterances that don't already have embeddings
+            # This is more efficient than checking each one individually
+            subquery = exists().where(
+                and_(
+                    Embedding.object_type == 'utterance',
+                    Embedding.object_id == Utterance.id,
+                    Embedding.dataset_id == dataset_id
+                )
+            )
+            
             query = db.query(Utterance).join(Variable).filter(
-                Variable.dataset_id == dataset_id
+                Variable.dataset_id == dataset_id,
+                not_(subquery)
             )
             if limit:
                 query = query.limit(limit)
             
             utterances = query.all()
+            total_to_process = len(utterances)
             
-            for utterance in utterances:
+            if total_to_process == 0:
+                logger.info(f"No utterances need embedding for dataset {dataset_id}")
+                return {'embeddings': 0, 'errors': 0, 'skipped': 0}
+            
+            logger.info(f"Processing {total_to_process} utterances without embeddings for dataset {dataset_id}")
+            
+            for idx, utterance in enumerate(utterances):
+                # Double-check that embedding doesn't exist (race condition protection)
+                existing = db.query(Embedding).filter(
+                    and_(
+                        Embedding.object_type == 'utterance',
+                        Embedding.object_id == utterance.id,
+                        Embedding.dataset_id == dataset_id,
+                    )
+                ).first()
+                if existing:
+                    skipped += 1
+                    continue
+                
                 embedding = self.create_utterance_embedding(db, utterance)
                 if embedding:
                     embeddings_created += 1
+                    # Log progress every 100 embeddings
+                    if embeddings_created % 100 == 0:
+                        logger.info(f"Progress: {embeddings_created}/{total_to_process} embeddings created for dataset {dataset_id}")
                 else:
                     errors += 1
             
-            logger.info(f"Generated {embeddings_created} utterance embeddings for dataset {dataset_id}, errors: {errors}")
+            logger.info(f"Generated {embeddings_created} utterance embeddings for dataset {dataset_id}, errors: {errors}, skipped: {skipped}")
             
-            return {'embeddings': embeddings_created, 'errors': errors}
+            return {'embeddings': embeddings_created, 'errors': errors, 'skipped': skipped}
             
         except Exception as e:
             logger.error(f"Error generating utterance embeddings: {e}", exc_info=True)

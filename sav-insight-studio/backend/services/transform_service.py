@@ -14,8 +14,29 @@ import logging
 
 from models import TransformJob, TransformResult, ExcludePattern
 from services.openai_service import openai_service
+import numpy as np
 
 logger = logging.getLogger(__name__)
+
+
+def convert_numpy_types(obj):
+    """
+    Recursively convert numpy types to Python native types.
+    Handles dicts, lists, and numpy scalars.
+    """
+    if isinstance(obj, np.integer):
+        return int(obj)
+    elif isinstance(obj, np.floating):
+        return float(obj)
+    elif isinstance(obj, np.ndarray):
+        return obj.tolist()
+    elif isinstance(obj, dict):
+        return {convert_numpy_types(k): convert_numpy_types(v) for k, v in obj.items()}
+    elif isinstance(obj, (list, tuple)):
+        return [convert_numpy_types(item) for item in obj]
+    elif pd.isna(obj):
+        return None
+    return obj
 
 
 # Patterns for detecting admin/metadata columns
@@ -563,7 +584,8 @@ class TransformService:
     ) -> Optional[Dict[str, Any]]:
         """Prepare a single variable for transformation"""
         code = var_info.get("code")
-        value = row_data
+        # Convert numpy types to Python native types
+        value = convert_numpy_types(row_data)
         
         # Skip empty values
         if pd.isna(value) or value == "" or value is None:
@@ -595,6 +617,9 @@ class TransformService:
         # Check if this specific value should be excluded (not applicable, prefer not to say, don't know)
         def should_exclude_value(val):
             """Check if a value should be excluded for this participant"""
+            # Convert numpy types for comparison
+            val = convert_numpy_types(val)
+            
             # First check common numeric codes (99, 999, 98, 998, 97, 997, 96, 996, 88, 888)
             common_exclude_codes = [99, 999, -99, -999, 98, 998, -98, -998, 97, 997, -97, -997, 96, 996, -96, -996, 88, 888, -88, -888]
             if val in common_exclude_codes:
@@ -602,7 +627,8 @@ class TransformService:
             
             # Then check label patterns
             for vl in value_labels:
-                if vl.get("value") == val:
+                vl_value = convert_numpy_types(vl.get("value"))
+                if vl_value == val:
                     label = (vl.get("label") or "").lower()
                     
                     # Check not applicable patterns
@@ -637,7 +663,8 @@ class TransformService:
         labels = []
         
         for vl in value_labels:
-            if vl.get("value") == value:
+            vl_value = convert_numpy_types(vl.get("value"))
+            if vl_value == value:
                 label = vl.get("label", str(value))
                 break
         
@@ -646,8 +673,10 @@ class TransformService:
         if var_type == "multi_choice" and isinstance(value, (list, tuple)):
             labels = []
             for v in value:
+                v_conv = convert_numpy_types(v)
                 for vl in value_labels:
-                    if vl.get("value") == v:
+                    vl_value = convert_numpy_types(vl.get("value"))
+                    if vl_value == v_conv:
                         labels.append(vl.get("label", str(v)))
                         break
         
@@ -718,12 +747,17 @@ class TransformService:
                 continue
             
             value = row_data.get(code)
+            # Convert numpy types to Python native types before processing
+            value = convert_numpy_types(value)
             
             if pd.isna(value) or value == "" or value is None:
                 empty_vars.append(code)
                 continue
             
             excluded_vals = exclude_values_by_variable.get(code, set())
+            # Convert excluded_vals to Python native types for comparison
+            excluded_vals = {convert_numpy_types(v) for v in excluded_vals}
+            
             # If multi-select style value is a list/tuple, treat as excluded only if all selected values are excluded
             try:
                 if isinstance(value, (list, tuple)):
@@ -761,6 +795,7 @@ class TransformService:
 
         if configured_id_col:
             val = row_data.get(configured_id_col)
+            val = convert_numpy_types(val)  # Convert numpy types
             if val is not None and not pd.isna(val) and str(val).strip() != "":
                 respondent_id = str(val)
         else:
@@ -768,6 +803,7 @@ class TransformService:
             for admin_col in admin_columns:
                 if "id" in admin_col.lower():
                     val = row_data.get(admin_col)
+                    val = convert_numpy_types(val)  # Convert numpy types
                     if val is not None and not pd.isna(val) and str(val).strip() != "":
                         respondent_id = str(val)
                         break
@@ -797,6 +833,22 @@ class TransformService:
             result.status = "completed" if transform_result["success"] else "failed"
             result.retry_count = transform_result["totalRetries"]
             result.processed_at = datetime.utcnow()
+            
+            # Extract error message from rawTrace if failed
+            if not transform_result["success"]:
+                errors = []
+                for chunk_trace in transform_result.get("rawTrace", {}).get("perChunk", []):
+                    chunk_errors = chunk_trace.get("errors", [])
+                    if chunk_errors:
+                        errors.extend(chunk_errors)
+                
+                if errors:
+                    # Get the most relevant error (usually the last one)
+                    error_msg = errors[-1] if errors else "Transformation failed"
+                    # Truncate if too long
+                    if len(error_msg) > 500:
+                        error_msg = error_msg[:497] + "..."
+                    result.error_message = error_msg
             
         except Exception as e:
             logger.error(f"Error processing row {row_index}: {e}")
@@ -887,14 +939,14 @@ class TransformService:
 
                     # Match via valueLabels label regex
                     for vl in value_labels:
-                        v = vl.get("value")
+                        v = convert_numpy_types(vl.get("value"))
                         lab = (vl.get("label") or "").lower()
                         if any(re.search(rx, lab, re.IGNORECASE) for rx in pattern_info["patterns"]):
                             excluded_vals.add(v)
 
                     # Also include known numeric codes for this pattern (99/999/etc)
                     for v in pattern_info.get("values", []):
-                        excluded_vals.add(v)
+                        excluded_vals.add(convert_numpy_types(v))
 
                 if excluded_vals:
                     mapping[code] = excluded_vals

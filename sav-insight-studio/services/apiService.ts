@@ -39,9 +39,14 @@ async function apiFetch(url: string, options: RequestInit = {}): Promise<Respons
 }
 
 class ApiService {
-  async uploadDataset(file: File): Promise<DatasetMeta> {
+  async uploadDataset(file: File, codebookFile?: File): Promise<DatasetMeta> {
     const formData = new FormData();
     formData.append('file', file);
+    
+    // Add codebook file if provided
+    if (codebookFile) {
+      formData.append('codebook', codebookFile);
+    }
 
     // For FormData, don't set Content-Type - browser will set it with boundary
     const headers: HeadersInit = {};
@@ -364,6 +369,19 @@ class ApiService {
     if (!response.ok) {
       const error = await response.json().catch(() => ({ detail: 'Failed to populate dataset data' }));
       throw new Error(error.detail || 'Failed to populate dataset data');
+    }
+
+    return response.json();
+  }
+
+  async getEmbeddingStatus(datasetId: string, autoResume: boolean = true): Promise<any> {
+    const url = `${API_BASE_URL}/research/datasets/${datasetId}/embedding-status${autoResume ? '?auto_resume=true' : ''}`;
+    const response = await apiFetch(url, {
+      method: 'GET',
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to get embedding status: ${response.statusText}`);
     }
 
     return response.json();

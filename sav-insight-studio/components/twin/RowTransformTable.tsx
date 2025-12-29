@@ -336,7 +336,16 @@ export default function RowTransformTable({
                         </span>
                       </td>
                       <td className="px-4 py-3 text-gray-800 max-w-[420px]">
-                        {firstSentence ? (
+                        {result?.status === 'failed' && result?.errorMessage ? (
+                          <div className="flex flex-col gap-1">
+                            <span className="block truncate text-xs text-red-600 font-medium">
+                              Hata: {result.errorMessage}
+                            </span>
+                            {firstSentence && (
+                              <span className="block truncate italic text-sm leading-relaxed text-gray-500">"{firstSentence}"</span>
+                            )}
+                          </div>
+                        ) : firstSentence ? (
                           <span className="block truncate italic text-sm leading-relaxed">"{firstSentence}"</span>
                         ) : (
                           <span className="text-gray-400 text-sm">-</span>

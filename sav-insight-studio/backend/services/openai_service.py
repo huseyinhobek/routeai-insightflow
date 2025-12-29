@@ -27,7 +27,7 @@ TRANSFORM_OUTPUT_SCHEMA = {
                     "properties": {
                         "sentence": {
                             "type": "string",
-                            "description": "First-person statement derived from the survey response"
+                            "description": "Anket cevabından türetilen birinci tekil şahıs ifadesi (Türkçe)"
                         },
                         "sources": {
                             "type": "array",
@@ -51,61 +51,63 @@ TRANSFORM_OUTPUT_SCHEMA = {
 }
 
 
-SYSTEM_PROMPT = """You are a "survey response to first-person statement transformer".
+SYSTEM_PROMPT = """Sen bir "anket cevaplarını birinci tekil şahıs ifadelerine dönüştüren" sistemsin.
 
-TASK:
-Transform survey responses into first-person statements. These sentences will be used to create a digital twin profile - meaning another AI will read these sentences to understand the person's profile.
+GÖREV:
+Anket cevaplarını birinci tekil şahıs ifadelerine dönüştür. Bu cümleler dijital ikiz profili oluşturmak için kullanılacak - yani başka bir AI bu cümleleri okuyarak kişinin profilini anlayacak.
 
-RULES:
-1. Only use information from the provided variables list
-2. Never invent new questions/columns
-3. Each sentence must contain at least 1 source, and sources must only consist of input variable names
-4. Empty answers are already filtered out, ignore them
-5. "No inference": do not make cause-effect, psychological interpretations, or generalizations
-6. Do not create double negative sentences (e.g., "I don't not agree")
-7. Short, clear but NATURAL sentences: 1 variable → usually 1 sentence
-   - Do not create single-word or very short sentences (e.g., "I am male." instead of "My gender is male.")
-8. Multiple multi-choice answers can be combined in one sentence but sources must include all
-9. If "Other (specify)" open text exists: convey the user's written text in first person
-10. For scales, use labels if available; otherwise use "I gave X out of Y" format
+KURALLAR:
+1. Sadece verilen değişken listesindeki bilgileri kullan
+2. Asla yeni soru/sütun uydurma
+3. Her cümle en az 1 kaynak içermeli ve kaynaklar sadece girdi değişken isimlerinden oluşmalı
+4. Boş cevaplar zaten filtrelenmiş, onları görmezden gel
+5. "Çıkarım yok": neden-sonuç, psikolojik yorumlar veya genellemeler yapma
+6. Çift olumsuz cümleler oluşturma (örn., "Katılmıyorum değilim")
+7. Kısa, net ama DOĞAL cümleler: 1 değişken → genellikle 1 cümle
+   - Tek kelimelik veya çok kısa cümleler oluşturma (örn., "Erkeğim." yerine "Cinsiyetim erkek.")
+8. Birden fazla çoklu seçim cevabı tek cümlede birleştirilebilir ama kaynaklar hepsini içermeli
+9. "Diğer (belirtiniz)" açık metin varsa: kullanıcının yazdığı metni birinci tekil şahısta aktar
+10. Ölçekler için, varsa etiketleri kullan; yoksa "X üzerinden Y verdim" formatını kullan
 
-INDEPENDENT SENTENCE RULE (CRITICAL):
-- Each sentence must be INDEPENDENTLY understandable
-- VAGUE EXPRESSIONS like "As mentioned in the question list...", "As stated above...", "The mentioned options..." are FORBIDDEN
-- The sentence must be clear enough that someone who hasn't seen the survey can understand it
-- Extract the topic from the question/label and include it in the sentence
+BAĞIMSIZ CÜMLE KURALI (KRİTİK):
+- Her cümle BAĞIMSIZ olarak anlaşılabilir olmalı
+- "Sorularda bahsedildiği gibi...", "Yukarıda belirtildiği üzere...", "Bahsedilen seçenekler..." gibi BELİRSİZ İFADELER YASAK
+- Cümle, anketi görmemiş biri tarafından anlaşılabilir kadar net olmalı
+- Soru/etiketten konuyu çıkar ve cümleye dahil et
 
-WRONG EXAMPLES (DON'T DO THESE):
-❌ "The financial activities mentioned in the question list apply to me."
-❌ "I prefer the mentioned options."
-❌ "None of the above apply to me."
-❌ "None of the life events listed above..."
-❌ "The activities in the list..."
-❌ "From the mentioned options..."
+YANLIŞ ÖRNEKLER (BUNLARI YAPMA):
+❌ "Sorularda bahsedilen finansal faaliyetler bana uygulanıyor."
+❌ "Bahsedilen seçenekleri tercih ediyorum."
+❌ "Yukarıdakilerin hiçbiri bana uygulanmıyor."
+❌ "Yukarıda listelenen yaşam olaylarından hiçbiri..."
+❌ "Listedeki faaliyetler..."
+❌ "Bahsedilen seçeneklerden..."
 
-For "None of the above" or "none" answers:
-- Skip the answer OR
-- If it must be included: create a summary sentence like "I had no significant life changes in the last 12 months."
+"Yukarıdakilerin hiçbiri" veya "hiçbiri" cevapları için:
+- Cevabı atla VEYA
+- Mutlaka dahil edilmesi gerekiyorsa: "Son 12 ayda önemli bir yaşam değişikliği yaşamadım." gibi özet bir cümle oluştur
 
-CORRECT EXAMPLES:
-✓ "I use online banking and mobile payments." (for financial activities)
-✓ "I drink coffee and tea." (for beverage preferences)
-✓ "I exercise 3-4 times per week." (for exercise frequency)
+DOĞRU ÖRNEKLER:
+✓ "Online bankacılık ve mobil ödeme kullanıyorum." (finansal faaliyetler için)
+✓ "Kahve ve çay içiyorum." (içecek tercihleri için)
+✓ "Haftada 3-4 kez egzersiz yapıyorum." (egzersiz sıklığı için)
 
-ADDITIONAL RULES:
-- Do not write variable codes (Q1, D2, S3_R_5, etc.) in the sentence
-- For Yes/No questions, state the question content in first person
-- Create concrete sentences using the selected answer's label/value
+EK KURALLAR:
+- Cümlede değişken kodları yazma (Q1, D2, S3_R_5, vb.) - ASLA parantez içinde değişken kodları ekleme
+- Cümlelerin sonunda parantez içinde değişken kodları GÖSTERME - Örnek: "Müzik aboneliğim var (M06_ABONELIK_B)." YANLIŞTIR
+- Doğru format: "Müzik aboneliğim var." (değişken kodu yok)
+- Evet/Hayır soruları için, soru içeriğini birinci tekil şahısta ifade et
+- Seçilen cevabın etiket/değerini kullanarak somut cümleler oluştur
 
-SENTENCE EXAMPLES:
-- Demographics: "I am 35 years old.", "I live in Ankara.", "I work in the software sector."
-- Yes/No: "I would recommend the product to my friends." or "I would not choose this brand again."
-- Scale: "I am very satisfied with customer service." (for satisfaction 5/5)
-- Multi-choice: "I shop online, pay bills, and transfer money over the internet."
-- Open text: "My suggestion about the company: I want faster delivery."
+CÜMLE ÖRNEKLERİ:
+- Demografik: "35 yaşındayım.", "Ankara'da yaşıyorum.", "Yazılım sektöründe çalışıyorum."
+- Evet/Hayır: "Ürünü arkadaşlarıma tavsiye ederim." veya "Bu markayı tekrar tercih etmem."
+- Ölçek: "Müşteri hizmetlerinden çok memnunum." (memnuniyet 5/5 için)
+- Çoklu seçim: "İnternet üzerinden alışveriş yapıyorum, faturaları ödüyorum ve para transferi yapıyorum."
+- Açık metin: "Şirket hakkında önerim: Daha hızlı teslimat istiyorum."
 
-LANGUAGE:
-Always generate sentences in English, regardless of the input language. Translate any non-English content to English while maintaining the meaning and context."""
+DİL:
+Her zaman cümleleri Türkçe oluştur, girdi dilinden bağımsız olarak. İngilizce veya başka dillerdeki içeriği Türkçe'ye çevirirken anlam ve bağlamı koru."""
 
 
 @dataclass
@@ -171,29 +173,32 @@ class OpenAIService:
             all_options = var.get('all_options', [])
             options_text = ""
             if all_options:
-                options_text = f"\nPossible Options: {', '.join(all_options[:10])}"  # Limit to 10 for brevity
+                options_text = f"\nOlası Seçenekler: {', '.join(all_options[:10])}"  # Limit to 10 for brevity
                 if len(all_options) > 10:
                     options_text += f" (ve {len(all_options) - 10} seçenek daha)"
             
             var_desc = f"""
-Variable: {var['name']}
-Question/Label: {var['question']}
-Type: {var['var_type']}{options_text}
-Selected Answer: {json.dumps(var['answer'], ensure_ascii=False)}
+Değişken: {var['name']}
+Soru/Etiket: {var['question']}
+Tip: {var['var_type']}{options_text}
+Seçilen Cevap: {json.dumps(var['answer'], ensure_ascii=False)}
 """
             variables_text.append(var_desc)
         
-        return f"""Respondent Row: {chunk_input.respondent.get('rowIndex', 'N/A')}
-Chunk: {chunk_input.chunk.get('chunkIndex', 0) + 1} / {chunk_input.chunk.get('chunkCount', 1)}
+        return f"""Katılımcı Satırı: {chunk_input.respondent.get('rowIndex', 'N/A')}
+Parça: {chunk_input.chunk.get('chunkIndex', 0) + 1} / {chunk_input.chunk.get('chunkCount', 1)}
 
-Variables to Transform:
+Dönüştürülecek Değişkenler:
 {'---'.join(variables_text)}
 
-Transform each variable's answer into a first-person sentence.
-IMPORTANT: Sentences must be independently understandable - DO NOT use vague expressions like "as mentioned in the question list".
-Clearly state the question's topic in the sentence (e.g., "I do X activities related to money/finance").
-Return a JSON format sentences array.
-ALL SENTENCES MUST BE IN ENGLISH."""
+Her değişkenin cevabını birinci tekil şahıs cümlesine dönüştür.
+ÖNEMLİ: Cümleler bağımsız olarak anlaşılabilir olmalı - "sorularda bahsedildiği gibi" gibi belirsiz ifadeler KULLANMA.
+Cümlede sorunun konusunu açıkça belirt (örn., "Para/finansla ilgili X faaliyetleri yapıyorum").
+KRİTİK: Cümlelerin sonunda veya içinde ASLA değişken kodları (parantez içinde veya başka şekilde) EKLEME.
+Örnek YANLIŞ: "Müzik aboneliğim var (M06_ABONELIK_B)."
+Örnek DOĞRU: "Müzik aboneliğim var."
+JSON formatında cümle dizisi döndür.
+TÜM CÜMLELER TÜRKÇE OLMALI."""
     
     def _validate_response(self, response_data: Dict, input_variables: List[str]) -> tuple[bool, List[str]]:
         """Validate the response schema and sources"""

@@ -4,15 +4,17 @@ Audiences, Threads, Questions, etc.
 """
 from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
+from sqlalchemy import func
 from typing import List, Optional, Dict, Any
 import uuid
 from datetime import datetime
 import logging
+import threading
 
 from database import get_db, DATABASE_AVAILABLE
 from models import (
     Dataset, Audience, AudienceMember, Thread, ThreadQuestion, ThreadResult,
-    CacheAnswer, User, Variable
+    CacheAnswer, User, Variable, Utterance, Embedding
 )
 from auth.dependencies import get_current_user_optional
 from middleware.org_scope import get_org_id_from_request
@@ -1057,6 +1059,70 @@ async def populate_dataset_data(
         raise HTTPException(status_code=500, detail=f"Failed to populate data: {str(e)}")
 
 
+# Global dictionary to track active embedding generation threads
+# Key: dataset_id, Value: thread object
+_active_embedding_threads = {}
+_thread_lock = threading.Lock()
+
+def _start_embedding_generation_thread(dataset_id: str) -> bool:
+    """
+    Start embedding generation in a background thread if not already running.
+    Returns True if thread was started, False if already running.
+    """
+    import threading
+    from database import SessionLocal
+    from services.embedding_service import embedding_service
+    
+    with _thread_lock:
+        # Check if thread is already running for this dataset
+        if dataset_id in _active_embedding_threads:
+            thread = _active_embedding_threads[dataset_id]
+            if thread.is_alive():
+                logger.debug(f"Embedding generation already running for dataset {dataset_id}")
+                return False
+            else:
+                # Thread died, remove it
+                del _active_embedding_threads[dataset_id]
+    
+    def _run_embedding_generation():
+        """Run embedding generation in a separate thread"""
+        try:
+            # Create a new DB session for this thread
+            thread_db = SessionLocal()
+            try:
+                # Generate embeddings for variables first
+                var_result = embedding_service.generate_embeddings_for_variables(
+                    db=thread_db, 
+                    dataset_id=dataset_id
+                )
+                logger.info(f"Generated variable embeddings for dataset {dataset_id}: {var_result}")
+                
+                # Generate embeddings for utterances (if utterances exist)
+                utterance_result = embedding_service.generate_embeddings_for_utterances(
+                    db=thread_db, 
+                    dataset_id=dataset_id
+                )
+                logger.info(f"Generated utterance embeddings for dataset {dataset_id}: {utterance_result}")
+            finally:
+                thread_db.close()
+        except Exception as e:
+            logger.error(f"Error generating embeddings for dataset {dataset_id}: {e}", exc_info=True)
+        finally:
+            # Remove thread from active threads when done
+            with _thread_lock:
+                if dataset_id in _active_embedding_threads:
+                    del _active_embedding_threads[dataset_id]
+    
+    # Start embedding generation in a background thread
+    thread = threading.Thread(target=_run_embedding_generation, daemon=True)
+    thread.start()
+    
+    with _thread_lock:
+        _active_embedding_threads[dataset_id] = thread
+    
+    logger.info(f"Started background embedding generation for dataset {dataset_id}")
+    return True
+
 @router.post("/datasets/{dataset_id}/generate-embeddings")
 async def generate_embeddings(
     dataset_id: str,
@@ -1067,6 +1133,9 @@ async def generate_embeddings(
     """
     Generate embeddings for variables and utterances in a dataset
     This is needed for the research workflow to work properly.
+    
+    NOTE: This runs in a background thread to avoid blocking the API.
+    The operation is idempotent - existing embeddings are skipped.
     """
     if not DATABASE_AVAILABLE:
         raise HTTPException(status_code=503, detail="Database not available")
@@ -1081,18 +1150,119 @@ async def generate_embeddings(
     if not settings.OPENAI_API_KEY:
         raise HTTPException(status_code=503, detail="OpenAI API key not configured")
     
-    from services.embedding_service import embedding_service
+    # Start embedding generation thread (will skip if already running)
+    started = _start_embedding_generation_thread(dataset_id)
     
-    # Generate embeddings for variables first
-    var_result = embedding_service.generate_embeddings_for_variables(db=db, dataset_id=dataset_id)
+    # Return immediately - the operation is running in background
+    return {
+        "dataset_id": dataset_id,
+        "message": "Embedding generation started in background. Use /embedding-status endpoint to check progress." if started else "Embedding generation already running.",
+        "status": "started" if started else "already_running"
+    }
+
+@router.get("/datasets/{dataset_id}/embedding-status")
+async def get_embedding_status(
+    dataset_id: str,
+    auto_resume: bool = True,  # Automatically resume if incomplete and no active thread
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user_optional),
+):
+    """
+    Get embedding generation status for a dataset
+    Returns total utterances, embedded utterances, and progress percentage
     
-    # Generate embeddings for utterances (if utterances exist)
-    utterance_result = embedding_service.generate_embeddings_for_utterances(db=db, dataset_id=dataset_id)
+    If auto_resume=True and embedding is incomplete with no active thread, automatically starts generation.
+    """
+    if not DATABASE_AVAILABLE:
+        raise HTTPException(status_code=503, detail="Database not available")
+    
+    # Verify dataset exists
+    dataset = db.query(Dataset).filter(Dataset.id == dataset_id).first()
+    if not dataset:
+        raise HTTPException(status_code=404, detail="Dataset not found")
+    
+    # Count total utterances for this dataset (count distinct IDs only)
+    total_utterances = db.query(func.count(func.distinct(Utterance.id))).join(Variable).filter(
+        Variable.dataset_id == dataset_id
+    ).scalar() or 0
+    
+    # Count utterances that have embeddings (count distinct IDs only)
+    embedded_utterances = db.query(func.count(func.distinct(Utterance.id))).join(Variable).join(
+        Embedding, 
+        (Embedding.object_type == 'utterance') & 
+        (Embedding.object_id == Utterance.id) &
+        (Embedding.dataset_id == dataset_id)
+    ).filter(
+        Variable.dataset_id == dataset_id
+    ).scalar() or 0
+    
+    # Count total variables
+    total_variables = db.query(Variable).filter(
+        Variable.dataset_id == dataset_id
+    ).count()
+    
+    # Count variables that have embeddings (count distinct IDs only)
+    embedded_variables = db.query(func.count(func.distinct(Variable.id))).join(
+        Embedding,
+        (Embedding.object_type == 'variable') &
+        (Embedding.object_id == Variable.id) &
+        (Embedding.dataset_id == dataset_id)
+    ).filter(
+        Variable.dataset_id == dataset_id
+    ).scalar() or 0
+    
+    # Calculate progress percentages (cap at 100%)
+    utterance_progress = min((embedded_utterances / total_utterances * 100) if total_utterances > 0 else 0, 100.0)
+    variable_progress = min((embedded_variables / total_variables * 100) if total_variables > 0 else 0, 100.0)
+    
+    # Overall progress (weighted average: utterances are usually more important)
+    # If both exist, weight utterances 70% and variables 30%
+    if total_utterances > 0 and total_variables > 0:
+        overall_progress = (utterance_progress * 0.7) + (variable_progress * 0.3)
+    elif total_utterances > 0:
+        overall_progress = utterance_progress
+    elif total_variables > 0:
+        overall_progress = variable_progress
+    else:
+        overall_progress = 0
+    
+    # Cap overall progress at 100%
+    overall_progress = min(overall_progress, 100.0)
+    
+    is_complete = embedded_utterances == total_utterances and embedded_variables == total_variables and total_utterances > 0
+    
+    # Auto-resume: If embedding is incomplete and no active thread, start it
+    is_running = False
+    if not is_complete and auto_resume:
+        with _thread_lock:
+            if dataset_id in _active_embedding_threads:
+                thread = _active_embedding_threads[dataset_id]
+                is_running = thread.is_alive()
+        
+        if not is_running:
+            # Check OpenAI API key before auto-resuming
+            from config import settings
+            if settings.OPENAI_API_KEY:
+                logger.info(f"Auto-resuming embedding generation for dataset {dataset_id} (incomplete: {embedded_utterances}/{total_utterances} utterances)")
+                _start_embedding_generation_thread(dataset_id)
+                is_running = True
+            else:
+                logger.warning(f"Cannot auto-resume embedding generation: OpenAI API key not configured")
     
     return {
         "dataset_id": dataset_id,
-        "variable_embeddings": var_result,
-        "utterance_embeddings": utterance_result,
-        "message": "Embeddings generated successfully"
+        "utterances": {
+            "total": total_utterances,
+            "embedded": embedded_utterances,
+            "progress": round(utterance_progress, 2)
+        },
+        "variables": {
+            "total": total_variables,
+            "embedded": embedded_variables,
+            "progress": round(variable_progress, 2)
+        },
+        "overall_progress": round(overall_progress, 2),
+        "is_complete": is_complete,
+        "is_running": is_running
     }
 

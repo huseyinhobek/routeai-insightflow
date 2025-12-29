@@ -193,6 +193,26 @@ def detect_measure_type(var_type: str, cardinality: int) -> str:
     return 'unknown'
 
 
+def convert_numpy_types(obj):
+    """
+    Recursively convert numpy types to Python native types.
+    Handles dicts, lists, and numpy scalars.
+    """
+    if isinstance(obj, np.integer):
+        return int(obj)
+    elif isinstance(obj, np.floating):
+        return float(obj)
+    elif isinstance(obj, np.ndarray):
+        return obj.tolist()
+    elif isinstance(obj, dict):
+        return {convert_numpy_types(k): convert_numpy_types(v) for k, v in obj.items()}
+    elif isinstance(obj, (list, tuple)):
+        return [convert_numpy_types(item) for item in obj]
+    elif pd.isna(obj):
+        return None
+    return obj
+
+
 def parse_column_header(col_str: str) -> tuple:
     """
     Parse column header to extract code and label.
@@ -248,7 +268,49 @@ class ExcelCsvMeta:
                     self.variable_value_labels[col] = value_labels
 
 
-def process_excel_csv_file(file_path: Path, original_filename: str) -> dict:
+def parse_codebook_json(codebook_path: Path) -> dict:
+    """
+    Parse JSON codebook file and return structured metadata.
+    Returns a dict with:
+    - questions_by_code: {code: question_dict} - includes main questions and derived columns
+    - meta: metadata dict
+    """
+    try:
+        with open(codebook_path, 'r', encoding='utf-8') as f:
+            codebook_data = json.load(f)
+        
+        questions_by_code = {}
+        for q in codebook_data.get('questions', []):
+            code = q.get('code')
+            if code:
+                questions_by_code[code] = q
+                
+                # For multi-choice questions, also add derived columns to the mapping
+                if q.get('type', '').lower() == 'multi' and q.get('derived_columns'):
+                    derived_cols = q.get('derived_columns', {})
+                    for derived_code, derived_info in derived_cols.items():
+                        # Create a synthetic question entry for derived column
+                        questions_by_code[derived_code] = {
+                            'code': derived_code,
+                            'text': derived_info.get('label', derived_code),
+                            'type': 'single',  # Derived columns are binary (0/1)
+                            'options': derived_info.get('value_coding', {
+                                '0': 'Seçilmedi',
+                                '1': 'Seçildi'
+                            }),
+                            'parent_question': code
+                        }
+        
+        return {
+            'meta': codebook_data.get('meta', {}),
+            'questions_by_code': questions_by_code
+        }
+    except Exception as e:
+        logger.warning(f"Failed to parse codebook JSON: {e}")
+        return {'meta': {}, 'questions_by_code': {}}
+
+
+def process_excel_csv_file(file_path: Path, original_filename: str, codebook_data: Optional[dict] = None) -> dict:
     """
     Process Excel (.xlsx) or CSV (.csv) file and extract metadata.
     
@@ -269,7 +331,18 @@ def process_excel_csv_file(file_path: Path, original_filename: str) -> dict:
         else:
             raise ValueError("Could not decode CSV file with any supported encoding")
     elif file_ext in ['xlsx', 'xls']:
-        df = pd.read_excel(str(file_path))
+        try:
+            # Try to read first sheet (default behavior)
+            df = pd.read_excel(str(file_path), sheet_name=0, engine='openpyxl')
+        except Exception as e:
+            # If openpyxl fails, try with xlrd for .xls files
+            if file_ext == 'xls':
+                try:
+                    df = pd.read_excel(str(file_path), sheet_name=0, engine='xlrd')
+                except Exception as e2:
+                    raise ValueError(f"Failed to read Excel file: {str(e2)}. Make sure the file is not corrupted and contains data in the first sheet.")
+            else:
+                raise ValueError(f"Failed to read Excel file: {str(e)}. Make sure the file is not corrupted and contains data in the first sheet.")
     else:
         raise ValueError(f"Unsupported file format: {file_ext}")
     
@@ -301,17 +374,107 @@ def process_excel_csv_file(file_path: Path, original_filename: str) -> dict:
     df = df.rename(columns=column_mapping)
     
     variables = []
+    questions_by_code = codebook_data.get('questions_by_code', {}) if codebook_data else {}
     
     for col in df.columns:
         series = df[col]
         value_labels = meta.variable_value_labels.get(col, {})
         variable_label = meta.column_names_to_labels.get(col, col)
         
-        var_type = detect_variable_type(series, value_labels)
+        # Check if codebook has info for this variable
+        codebook_q = questions_by_code.get(col)
+        
+        # Use codebook question text if available
+        if codebook_q:
+            question_text = codebook_q.get('text', variable_label)
+            variable_label = question_text  # Override with codebook label
+        
+        # Determine variable type - prefer codebook if available
+        if codebook_q:
+            codebook_type = codebook_q.get('type', '').lower()
+            if codebook_type == 'numeric':
+                var_type = 'numeric'
+            elif codebook_type == 'single':
+                var_type = 'single_choice'
+            elif codebook_type == 'multi':
+                var_type = 'multi_choice'
+            elif codebook_type == 'scale':
+                var_type = 'scale'
+            elif codebook_type == 'text':
+                var_type = 'text'
+            else:
+                var_type = detect_variable_type(series, value_labels)
+        else:
+            var_type = detect_variable_type(series, value_labels)
+        
         cardinality = series.nunique()
         measure = detect_measure_type(var_type, cardinality)
         
-        value_labels_list = [{"value": k, "label": v} for k, v in value_labels.items()]
+        # Build value labels - prefer codebook if available
+        value_labels_list = []
+        if codebook_q:
+            # Check for derived column value_coding first (for binary columns from multi-choice)
+            if codebook_q.get('value_coding'):
+                value_coding = codebook_q.get('value_coding', {})
+                for val_code, val_label in value_coding.items():
+                    # Convert code to match data type (try both string and int)
+                    val_code_conv = convert_numpy_types(val_code)
+                    value_labels_list.append({
+                        "value": val_code_conv,
+                        "label": val_label
+                    })
+            # Check for regular options (single-choice questions)
+            elif codebook_q.get('options'):
+                options = codebook_q.get('options', {})
+                # Get actual data values to determine type
+                unique_values = series.dropna().unique()[:10]  # Sample first 10
+                # Check if data uses numeric or string codes
+                data_is_numeric = False
+                if len(unique_values) > 0:
+                    # Check if data values are numeric (int or float)
+                    sample_val = unique_values[0]
+                    if pd.api.types.is_integer_dtype(series) or pd.api.types.is_float_dtype(series):
+                        data_is_numeric = True
+                    elif isinstance(sample_val, (int, float)) or (isinstance(sample_val, str) and sample_val.isdigit()):
+                        data_is_numeric = True
+                
+                for opt_code, opt_label in options.items():
+                    # Convert option code to match data type
+                    # Codebook keys are usually strings ("1", "2", "3")
+                    # But Excel data might be integers (1, 2, 3)
+                    opt_code_conv = convert_numpy_types(opt_code)
+                    
+                    # If data is numeric, convert codebook string keys to integers
+                    if data_is_numeric:
+                        try:
+                            # Try converting string "1" to int 1
+                            if isinstance(opt_code_conv, str) and opt_code_conv.isdigit():
+                                opt_code_conv = int(opt_code_conv)
+                            elif isinstance(opt_code_conv, (int, float)):
+                                opt_code_conv = int(opt_code_conv)
+                        except (ValueError, TypeError):
+                            pass
+                    
+                    value_labels_list.append({
+                        "value": opt_code_conv,
+                        "label": opt_label
+                    })
+            # Check for scale labels
+            elif codebook_q.get('scale'):
+                scale_labels = codebook_q.get('scale', {}).get('labels', {})
+                for scale_val, scale_label in scale_labels.items():
+                    scale_val_conv = convert_numpy_types(scale_val)
+                    value_labels_list.append({
+                        "value": scale_val_conv,
+                        "label": scale_label
+                    })
+        
+        # If no codebook labels found, fallback to data-derived value labels
+        if not value_labels_list:
+            for k, v in value_labels.items():
+                k_conv = convert_numpy_types(k)
+                v_conv = convert_numpy_types(v)
+                value_labels_list.append({"value": k_conv, "label": v_conv})
         
         total = len(series)
         non_missing = series.notna().sum()
@@ -337,6 +500,9 @@ def process_excel_csv_file(file_path: Path, original_filename: str) -> dict:
     quality_report = analyzer.analyze()
     quality_dict = asdict(quality_report)
     
+    # Convert numpy types in quality_dict
+    quality_dict = convert_numpy_types(quality_dict)
+    
     dataset_id = str(uuid.uuid4())
     
     result_info = {
@@ -345,14 +511,14 @@ def process_excel_csv_file(file_path: Path, original_filename: str) -> dict:
         "original_filename": original_filename,
         "file_path": str(file_path),
         "file_type": file_ext,  # Track file type for later reading
-        "nRows": len(df),
-        "nCols": len(df.columns),
+        "nRows": int(len(df)),
+        "nCols": int(len(df.columns)),
         "createdAt": datetime.now().isoformat(),
-        "variables": variables,
+        "variables": convert_numpy_types(variables),
         "qualityReport": quality_dict,
-        "overallCompletionRate": quality_dict["completeness_score"],
-        "dataQualityScore": quality_dict["overall_score"],
-        "digitalTwinReadiness": quality_dict["digital_twin_readiness"]
+        "overallCompletionRate": convert_numpy_types(quality_dict.get("completeness_score", 0)),
+        "dataQualityScore": convert_numpy_types(quality_dict.get("overall_score", 0)),
+        "digitalTwinReadiness": convert_numpy_types(quality_dict.get("digital_twin_readiness", {}))
     }
     
     # Cache dataframe and info
@@ -384,7 +550,13 @@ def process_sav_file(file_path: Path, original_filename: str) -> dict:
         cardinality = series.nunique()
         measure = detect_measure_type(var_type, cardinality)
         
-        value_labels_list = [{"value": k, "label": v} for k, v in value_labels.items()]
+        # Convert value labels keys to native Python types
+        value_labels_list = []
+        for k, v in value_labels.items():
+            # Convert numpy types in keys and values
+            k_conv = convert_numpy_types(k)
+            v_conv = convert_numpy_types(v)
+            value_labels_list.append({"value": k_conv, "label": v_conv})
         
         missing_values = None
         if hasattr(meta, 'missing_ranges') and col in meta.missing_ranges:
@@ -411,6 +583,9 @@ def process_sav_file(file_path: Path, original_filename: str) -> dict:
     quality_report = analyzer.analyze()
     quality_dict = asdict(quality_report)
     
+    # Convert numpy types in quality_dict
+    quality_dict = convert_numpy_types(quality_dict)
+    
     dataset_id = str(uuid.uuid4())
     
     result_info = {
@@ -418,14 +593,14 @@ def process_sav_file(file_path: Path, original_filename: str) -> dict:
         "filename": file_path.name,
         "original_filename": original_filename,
         "file_path": str(file_path),
-        "nRows": len(df),
-        "nCols": len(df.columns),
+        "nRows": int(len(df)),
+        "nCols": int(len(df.columns)),
         "createdAt": datetime.now().isoformat(),
-        "variables": variables,
+        "variables": convert_numpy_types(variables),
         "qualityReport": quality_dict,
-        "overallCompletionRate": quality_dict["completeness_score"],
-        "dataQualityScore": quality_dict["overall_score"],
-        "digitalTwinReadiness": quality_dict["digital_twin_readiness"]
+        "overallCompletionRate": convert_numpy_types(quality_dict.get("completeness_score", 0)),
+        "dataQualityScore": convert_numpy_types(quality_dict.get("overall_score", 0)),
+        "digitalTwinReadiness": convert_numpy_types(quality_dict.get("digital_twin_readiness", {}))
     }
     
     # Cache dataframe and info (with size limit)
@@ -565,7 +740,18 @@ def load_file_to_dataframe(file_path: Path) -> tuple:
         df = df.rename(columns=column_mapping)
         meta = ExcelCsvMeta(df)
     elif file_ext in ['.xlsx', '.xls']:
-        df = pd.read_excel(str(file_path))
+        try:
+            # Try to read first sheet (default behavior)
+            df = pd.read_excel(str(file_path), sheet_name=0, engine='openpyxl')
+        except Exception as e:
+            # If openpyxl fails, try with xlrd for .xls files
+            if file_ext == '.xls':
+                try:
+                    df = pd.read_excel(str(file_path), sheet_name=0, engine='xlrd')
+                except Exception as e2:
+                    raise ValueError(f"Failed to read Excel file: {str(e2)}. Make sure the file is not corrupted and contains data in the first sheet.")
+            else:
+                raise ValueError(f"Failed to read Excel file: {str(e)}. Make sure the file is not corrupted and contains data in the first sheet.")
         
         # Create mock meta and process columns
         df.columns = [str(col).strip() for col in df.columns]
@@ -805,10 +991,14 @@ SUPPORTED_EXTENSIONS = ['.sav', '.xlsx', '.xls', '.csv']
 async def upload_dataset(
     request: Request,
     file: UploadFile = File(...),
+    codebook: Optional[UploadFile] = File(None),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user_optional),
 ):
-    """Upload and process a SAV, Excel, or CSV file"""
+    """
+    Upload and process a SAV, Excel, or CSV file.
+    Optionally accepts a JSON codebook file for enhanced metadata.
+    """
     # Validate filename
     if not file.filename:
         raise HTTPException(status_code=400, detail="Filename is required")
@@ -823,26 +1013,51 @@ async def upload_dataset(
     
     # Generate unique filename with correct extension
     file_path = UPLOAD_DIR / f"{uuid.uuid4()}{file_ext}"
+    codebook_path = None
+    codebook_data = None
     
     try:
-        # Read file content
+        # Read and save data file
         content = await file.read()
         
         # Validate file is not empty
         if len(content) == 0:
             raise HTTPException(status_code=400, detail="Uploaded file is empty")
         
-        # Save file
+        # Save data file
         with open(file_path, "wb") as f:
             f.write(content)
+        
+        # Process codebook if provided
+        if codebook and codebook.filename:
+            codebook_ext = codebook.filename.lower().split('.')[-1] if '.' in codebook.filename else ''
+            if codebook_ext == 'json':
+                codebook_path = UPLOAD_DIR / f"{uuid.uuid4()}.json"
+                codebook_content = await codebook.read()
+                
+                if len(codebook_content) == 0:
+                    logger.warning("Codebook file is empty, proceeding without codebook")
+                else:
+                    # Save codebook file
+                    with open(codebook_path, "wb") as f:
+                        f.write(codebook_content)
+                    
+                    # Parse codebook
+                    try:
+                        codebook_data = parse_codebook_json(codebook_path)
+                        logger.info(f"Codebook loaded: {len(codebook_data.get('questions_by_code', {}))} questions")
+                    except Exception as e:
+                        logger.warning(f"Failed to parse codebook, proceeding without it: {e}")
+            else:
+                logger.warning(f"Codebook file has unsupported extension: {codebook_ext}, proceeding without codebook")
         
         # Process file based on type
         try:
             if file_ext == '.sav':
                 dataset_info = process_sav_file(file_path, file.filename)
             else:
-                # Excel or CSV
-                dataset_info = process_excel_csv_file(file_path, file.filename)
+                # Excel or CSV - pass codebook data if available
+                dataset_info = process_excel_csv_file(file_path, file.filename, codebook_data)
         except Exception as parse_error:
             import traceback
             error_trace = traceback.format_exc()
@@ -1894,30 +2109,45 @@ def _run_transform_job_in_thread(job_id: str, dataset_id: str):
             # After a successful transform job, upsert utterances from
             # TransformResult sentences and generate utterance embeddings so
             # that RAG/threads can immediately use them.
+            # Run in a separate thread to avoid blocking the main worker.
             # ------------------------------------------------------------------
-            try:
-                from services.utterance_service import utterance_service
-                from services.embedding_service import embedding_service
+            def _run_post_processing():
+                """Run post-processing in a separate thread to avoid blocking"""
+                try:
+                    from database import SessionLocal
+                    from services.utterance_service import utterance_service
+                    from services.embedding_service import embedding_service
+                    
+                    # Create a new DB session for this thread
+                    post_db = SessionLocal()
+                    try:
+                        # Upsert utterances for this dataset/job
+                        utt_stats = utterance_service.generate_utterances_from_transform_results(
+                            db=post_db,
+                            dataset_id=dataset_id,
+                            job_id=job_id,
+                        )
+                        print(f"[BG] Generated/updated utterances after job {job_id}: {utt_stats}")
 
-                # Upsert utterances for this dataset/job
-                utt_stats = utterance_service.generate_utterances_from_transform_results(
-                    db=db_session,
-                    dataset_id=dataset_id,
-                    job_id=job_id,
-                )
-                print(f"[BG] Generated/updated utterances after job {job_id}: {utt_stats}")
-
-                # Generate embeddings for those utterances
-                emb_stats = embedding_service.generate_embeddings_for_utterances(
-                    db=db_session,
-                    dataset_id=dataset_id,
-                )
-                print(f"[BG] Generated utterance embeddings after job {job_id}: {emb_stats}")
-            except Exception as post_err:
-                # Do not fail the job if post-processing fails; just log visibly.
-                print(f"[BG] Post-processing (utterances/embeddings) failed for job {job_id}: {post_err}")
-                import traceback as _tb
-                _tb.print_exc()
+                        # Generate embeddings for those utterances (this can take a long time)
+                        emb_stats = embedding_service.generate_embeddings_for_utterances(
+                            db=post_db,
+                            dataset_id=dataset_id,
+                        )
+                        print(f"[BG] Generated utterance embeddings after job {job_id}: {emb_stats}")
+                    finally:
+                        post_db.close()
+                except Exception as post_err:
+                    # Do not fail the job if post-processing fails; just log visibly.
+                    print(f"[BG] Post-processing (utterances/embeddings) failed for job {job_id}: {post_err}")
+                    import traceback as _tb
+                    _tb.print_exc()
+            
+            # Start post-processing in a separate daemon thread
+            import threading as _threading
+            post_thread = _threading.Thread(target=_run_post_processing, daemon=True)
+            post_thread.start()
+            print(f"[BG] Started post-processing thread for job {job_id}")
         except Exception as e:
             print(f"[BG] Transform job error: {e}")
             import traceback

@@ -11,7 +11,10 @@ const UploadPage: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [recentDatasets, setRecentDatasets] = useState<DatasetListItem[]>([]);
   const [loadingRecent, setLoadingRecent] = useState(true);
+  const [selectedDataFile, setSelectedDataFile] = useState<File | null>(null);
+  const [selectedCodebookFile, setSelectedCodebookFile] = useState<File | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const codebookInputRef = useRef<HTMLInputElement>(null);
   const navigate = useNavigate();
   const { user, logout } = useAuth();
 
@@ -36,13 +39,37 @@ const UploadPage: React.FC = () => {
   };
 
   const SUPPORTED_EXTENSIONS = ['.sav', '.xlsx', '.xls', '.csv'];
+  const SUPPORTED_CODEBOOK_EXTENSIONS = ['.json'];
   
-  const handleFile = async (file: File) => {
+  const handleDataFile = (file: File) => {
     const fileName = file.name.toLowerCase();
     const hasValidExtension = SUPPORTED_EXTENSIONS.some(ext => fileName.endsWith(ext));
     
     if (!hasValidExtension) {
-      setError(`Please upload a valid file. Supported formats: ${SUPPORTED_EXTENSIONS.join(', ')}`);
+      setError(`Please upload a valid data file. Supported formats: ${SUPPORTED_EXTENSIONS.join(', ')}`);
+      return;
+    }
+    
+    setSelectedDataFile(file);
+    setError(null);
+  };
+
+  const handleCodebookFile = (file: File) => {
+    const fileName = file.name.toLowerCase();
+    const hasValidExtension = SUPPORTED_CODEBOOK_EXTENSIONS.some(ext => fileName.endsWith(ext));
+    
+    if (!hasValidExtension) {
+      setError(`Codebook must be a JSON file (.json)`);
+      return;
+    }
+    
+    setSelectedCodebookFile(file);
+    setError(null);
+  };
+
+  const handleUpload = async () => {
+    if (!selectedDataFile) {
+      setError('Lütfen önce bir veri dosyası seçin');
       return;
     }
 
@@ -50,15 +77,44 @@ const UploadPage: React.FC = () => {
     setError(null);
 
     try {
-      const dataset = await apiService.uploadDataset(file);
+      const dataset = await apiService.uploadDataset(selectedDataFile, selectedCodebookFile || undefined);
       localStorage.setItem('currentDatasetId', dataset.id);
       localStorage.setItem('currentDatasetMeta', JSON.stringify(dataset));
       navigate('/overview');
     } catch (err: any) {
       console.error(err);
-      setError(err.message || 'Upload failed. Is the backend running?');
+      setError(err.message || 'Yükleme başarısız. Backend çalışıyor mu?');
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const handleFile = async (file: File) => {
+    const fileName = file.name.toLowerCase();
+    const hasValidExtension = SUPPORTED_EXTENSIONS.some(ext => fileName.endsWith(ext));
+    
+    if (!hasValidExtension) {
+      setError(`Lütfen geçerli bir veri dosyası yükleyin. Desteklenen formatlar: ${SUPPORTED_EXTENSIONS.join(', ')}`);
+      return;
+    }
+    
+    setSelectedDataFile(file);
+    setError(null);
+    
+    // Auto-upload if no codebook is selected (backward compatibility)
+    if (!selectedCodebookFile) {
+      setIsLoading(true);
+      try {
+        const dataset = await apiService.uploadDataset(file);
+        localStorage.setItem('currentDatasetId', dataset.id);
+        localStorage.setItem('currentDatasetMeta', JSON.stringify(dataset));
+        navigate('/overview');
+      } catch (err: any) {
+        console.error(err);
+        setError(err.message || 'Yükleme başarısız. Backend çalışıyor mu?');
+      } finally {
+        setIsLoading(false);
+      }
     }
   };
 
@@ -143,50 +199,103 @@ const UploadPage: React.FC = () => {
         </div>
 
         {/* Upload Area */}
-        <div
-          onDragOver={onDragOver}
-          onDragLeave={onDragLeave}
-          onDrop={onDrop}
-          onClick={() => fileInputRef.current?.click()}
-          className={`
-            relative group cursor-pointer
-            border-2 border-dashed rounded-3xl p-12
-            flex flex-col items-center justify-center text-center
-            transition-all duration-300 ease-in-out
-            bg-white shadow-sm hover:shadow-lg
-            ${isDragging ? 'border-blue-500 bg-blue-50 scale-[1.02]' : 'border-gray-300 hover:border-blue-400'}
-            ${isLoading ? 'opacity-50 pointer-events-none' : ''}
-          `}
-        >
-          <input
-            type="file"
-            ref={fileInputRef}
-            className="hidden"
-            accept=".sav,.xlsx,.xls,.csv"
-            onChange={(e) => e.target.files?.[0] && handleFile(e.target.files[0])}
-          />
+        <div className="space-y-6">
+          {/* Data File Upload */}
+          <div
+            onDragOver={onDragOver}
+            onDragLeave={onDragLeave}
+            onDrop={onDrop}
+            onClick={() => fileInputRef.current?.click()}
+            className={`
+              relative group cursor-pointer
+              border-2 border-dashed rounded-3xl p-8
+              flex flex-col items-center justify-center text-center
+              transition-all duration-300 ease-in-out
+              bg-white shadow-sm hover:shadow-lg
+              ${isDragging ? 'border-blue-500 bg-blue-50 scale-[1.02]' : 'border-gray-300 hover:border-blue-400'}
+              ${isLoading ? 'opacity-50 pointer-events-none' : ''}
+            `}
+          >
+            <input
+              type="file"
+              ref={fileInputRef}
+              className="hidden"
+              accept=".sav,.xlsx,.xls,.csv"
+              onChange={(e) => e.target.files?.[0] && handleDataFile(e.target.files[0])}
+            />
 
-          <div className="bg-gradient-to-br from-blue-100 to-indigo-100 p-5 rounded-full mb-6 group-hover:from-blue-200 group-hover:to-indigo-200 transition-colors">
-            {isLoading ? (
-              <Loader2 className="w-10 h-10 text-blue-600 animate-spin" />
-            ) : (
-              <UploadCloud className="w-10 h-10 text-blue-600" />
-            )}
+            <div className="bg-gradient-to-br from-blue-100 to-indigo-100 p-4 rounded-full mb-4 group-hover:from-blue-200 group-hover:to-indigo-200 transition-colors">
+              <UploadCloud className="w-8 h-8 text-blue-600" />
+            </div>
+
+            <h3 className="text-lg font-semibold text-gray-900 mb-2">
+              {selectedDataFile ? selectedDataFile.name : 'Veri Dosyası (Excel/CSV/SAV)'}
+            </h3>
+            <p className="text-xs text-gray-500 max-w-sm mx-auto">
+              SPSS (.sav), Excel (.xlsx, .xls), CSV (.csv)
+            </p>
           </div>
 
-          <h3 className="text-xl font-semibold text-gray-900 mb-2">
-            {isLoading ? 'Analyzing File...' : 'Click or drag a file here'}
-          </h3>
-          <p className="text-sm text-gray-500 max-w-sm mx-auto">
-            Supported formats: SPSS (.sav), Excel (.xlsx, .xls), CSV (.csv). 
-            Recommended maximum size: 100MB.
-          </p>
+          {/* Codebook File Upload (Optional) */}
+          <div
+            onClick={() => codebookInputRef.current?.click()}
+            className={`
+              relative group cursor-pointer
+              border-2 border-dashed rounded-2xl p-6
+              flex flex-col items-center justify-center text-center
+              transition-all duration-300 ease-in-out
+              bg-white shadow-sm hover:shadow-lg
+              border-gray-200 hover:border-indigo-400
+              ${isLoading ? 'opacity-50 pointer-events-none' : ''}
+            `}
+          >
+            <input
+              type="file"
+              ref={codebookInputRef}
+              className="hidden"
+              accept=".json"
+              onChange={(e) => e.target.files?.[0] && handleCodebookFile(e.target.files[0])}
+            />
 
-          {!isLoading && (
-            <div className="mt-8 flex items-center space-x-2 text-sm text-gray-400">
-              <FileType size={16} />
-              <span>Secure processing - your data is uploaded to the server</span>
+            <div className="bg-gradient-to-br from-indigo-100 to-purple-100 p-3 rounded-full mb-3 group-hover:from-indigo-200 group-hover:to-purple-200 transition-colors">
+              <FileType className="w-6 h-6 text-indigo-600" />
             </div>
+
+            <h3 className="text-sm font-semibold text-gray-900 mb-1">
+              {selectedCodebookFile ? selectedCodebookFile.name : 'Codebook (JSON) - Opsiyonel'}
+            </h3>
+            <p className="text-xs text-gray-500">
+              Soru metinleri ve değer etiketleri için JSON codebook
+            </p>
+          </div>
+
+          {/* Upload Button */}
+          {selectedDataFile && (
+            <button
+              onClick={handleUpload}
+              disabled={isLoading}
+              className={`
+                w-full py-4 px-6 rounded-xl font-semibold text-white
+                transition-all duration-300
+                ${isLoading 
+                  ? 'bg-gray-400 cursor-not-allowed' 
+                  : 'bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 shadow-lg hover:shadow-xl'
+                }
+                flex items-center justify-center space-x-2
+              `}
+            >
+              {isLoading ? (
+                <>
+                  <Loader2 className="w-5 h-5 animate-spin" />
+                  <span>Yükleniyor ve analiz ediliyor...</span>
+                </>
+              ) : (
+                <>
+                  <UploadCloud className="w-5 h-5" />
+                  <span>Dosyaları Yükle ve Analiz Et</span>
+                </>
+              )}
+            </button>
           )}
         </div>
 

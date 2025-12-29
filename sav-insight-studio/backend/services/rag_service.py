@@ -53,19 +53,19 @@ RAG_SYNTHESIS_OUTPUT_SCHEMA = {
     }
 }
 
-RAG_SYNTHESIS_SYSTEM_PROMPT = """You are a survey data analyst tasked with synthesizing themes from retrieved survey responses.
+RAG_SYNTHESIS_SYSTEM_PROMPT = """Sen bir anket veri analizcisisin. Görevin, alınan anket cevaplarından temaları sentezlemek.
 
-CRITICAL RULES:
-1. You MUST only use information from the provided citations/quotes. Do not invent or generalize beyond what is shown.
-2. You MUST NOT state global percentages or statistics (e.g., "X% of respondents"). Only reference the retrieved sample.
-3. Always phrase results in terms of "in the retrieved sample" or "among these responses".
-4. Each theme must be supported by at least 1-3 representative quotes from the citations.
-5. Group similar responses into coherent themes.
-6. Provide a narrative summary that synthesizes the themes without making population-level claims.
+KRİTİK KURALLAR:
+1. SADECE verilen alıntılardan/aktarımlardan bilgi kullanmalısın. Gösterilenlerin ötesinde uydurma veya genelleme yapma.
+2. Genel yüzdeler veya istatistikler belirtme (örn., "Katılımcıların %X'i"). Sadece alınan örneği referans al.
+3. Sonuçları her zaman "alınan örnekte" veya "bu cevaplar arasında" şeklinde ifade et.
+4. Her tema, alıntılardan en az 1-3 temsilci alıntı ile desteklenmeli.
+5. Benzer cevapları tutarlı temalarda grupla.
+6. Nüfus düzeyinde iddialarda bulunmadan temaları sentezleyen bir özet anlatı sağla.
 
-OUTPUT:
-- themes: Array of theme objects, each with a description, support_count (number of citations), and representative_quotes
-- narrative: A 2-3 sentence summary that ties the themes together, phrased in terms of the retrieved sample"""
+ÇIKTI:
+- themes: Her biri bir açıklama, support_count (alıntı sayısı) ve temsilci alıntılar içeren tema nesneleri dizisi
+- narrative: Temaları birbirine bağlayan, alınan örnek açısından ifade edilen 2-3 cümlelik özet (TÜRKÇE)"""
 
 
 class RAGService:
@@ -176,8 +176,8 @@ class RAGService:
             # Return empty result if no citations
             return {
                 "themes": [],
-                "caveats": ["No citations retrieved"],
-                "narrative": "No relevant responses found in the retrieved sample."
+                "caveats": ["Alıntı alınamadı"],
+                "narrative": "Alınan örnekte ilgili cevap bulunamadı."
             }
         
         # Build user message with citations
@@ -189,17 +189,18 @@ class RAGService:
                 f"Response: {cit.get('snippet', '')}\n"
             )
         
-        user_message = f"""Question: {question_text}
+        user_message = f"""Soru: {question_text}
 
-Retrieved {len(citations)} relevant responses:
+{len(citations)} ilgili cevap alındı:
 
 {''.join(citations_text)}
 
-Please analyze these responses and identify key themes. Remember:
-- Only use information from the citations above
-- Do not state global percentages or statistics
-- Phrase results in terms of "in the retrieved sample" or "among these responses"
-- Each theme must include at least 1-3 representative quotes from the citations above"""
+Lütfen bu cevapları analiz et ve ana temaları belirle. Unutma:
+- Sadece yukarıdaki alıntılardan bilgi kullan
+- Genel yüzdeler veya istatistikler belirtme
+- Sonuçları "alınan örnekte" veya "bu cevaplar arasında" şeklinde ifade et
+- Her tema yukarıdaki alıntılardan en az 1-3 temsilci alıntı içermeli
+- TÜM ÇIKTI TÜRKÇE OLMALI"""
         
         # Call OpenAI API (async)
         try:
@@ -241,8 +242,8 @@ Please analyze these responses and identify key themes. Remember:
             
             # Add caveats
             caveats = [
-                "Results are based on retrieved sample, not population percentages",
-                f"Sample size: {len(citations)}"
+                "Sonuçlar alınan örneğe dayanmaktadır, nüfus yüzdelerine değil",
+                f"Örnek boyutu: {len(citations)}"
             ]
             
             return {
@@ -279,13 +280,13 @@ Please analyze these responses and identify key themes. Remember:
                 ]
             })
         
-        narrative = f"In the retrieved sample of {len(citations)} responses, various perspectives on '{question_text}' were found."
+        narrative = f"Alınan {len(citations)} cevap örneğinde, '{question_text}' hakkında çeşitli bakış açıları bulundu."
         
         return {
             "themes": themes,
             "caveats": [
-                "Results are based on retrieved sample, not population percentages",
-                f"Sample size: {len(citations)}"
+                "Sonuçlar alınan örneğe dayanmaktadır, nüfus yüzdelerine değil",
+                f"Örnek boyutu: {len(citations)}"
             ],
             "narrative": narrative
         }
