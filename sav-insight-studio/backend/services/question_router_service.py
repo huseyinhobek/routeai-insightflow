@@ -571,16 +571,16 @@ class QuestionRouterService:
                 question_text=question_text,
                 threshold=0.65  # 65% similarity threshold
             )
-            decision_intent = decision_intent_result.get("is_decision_intent", False)
-            logger.info(f"Decision intent detection: {decision_intent} (method: {decision_intent_result.get('method')}, score: {decision_intent_result.get('similarity', 0):.3f})")
+            decision_intent = decision_intent_result.get("has_decision_intent", False)
+            logger.info(f"Decision intent detection: {decision_intent} (method: {decision_intent_result.get('method')}, score: {decision_intent_result.get('similarity_score', 0):.3f})")
         except Exception as e:
             logger.warning(f"Error in decision intent detection, falling back to keyword-only: {e}")
             decision_intent = False
-            decision_intent_result = {"is_decision_intent": False, "method": "error", "reason": str(e)}
+            decision_intent_result = {"has_decision_intent": False, "method": "error", "reason": str(e)}
         
         # Step 2: Check for decision intent - if detected, route to decision_proxy mode
         # (This happens AFTER checking for explicit variable codes)
-        if decision_intent_result and decision_intent_result.get("is_decision_intent", False):
+        if decision_intent_result and decision_intent_result.get("has_decision_intent", False):
             # Decision intent detected - route to decision_proxy mode
             # We still try to find a proxy target variable, but don't require it
             proxy_target_variable_id = None

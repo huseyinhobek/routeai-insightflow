@@ -69,7 +69,7 @@ const Layout: React.FC = () => {
       {/* Sidebar */}
       <aside className="w-64 bg-white border-r border-gray-200 flex flex-col z-10 shadow-sm">
         <div className="p-5 border-b border-gray-100 flex flex-col items-center">
-          <img src={aletheiaLogo} alt="Aletheia Logo" className="w-40 h-auto" />
+          <img src={aletheiaLogo} alt="Aletheia Logo" className="w-48 h-auto" />
         </div>
         
         <nav className="flex-1 p-4 space-y-1">
