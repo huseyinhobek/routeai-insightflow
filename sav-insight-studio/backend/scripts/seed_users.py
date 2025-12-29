@@ -86,7 +86,7 @@ def create_user(db, email: str, name: str, org: Organization, role: str, passwor
 
 def main():
     print("\n" + "="*60)
-    print("SAV Insight Studio - User & Organization Seed Script")
+    print("Aletheia - User & Organization Seed Script")
     print("="*60 + "\n")
     
     # Initialize database

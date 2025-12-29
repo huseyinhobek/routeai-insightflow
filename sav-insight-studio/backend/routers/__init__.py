@@ -1,5 +1,5 @@
 """
-API Routers for SAV Insight Studio
+API Routers for Aletheia
 """
 
 from .auth import router as auth_router

@@ -1,0 +1,57 @@
+<svg width="400" height="140" viewBox="0 0 400 140" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <style>
+      .logo-main {
+        fill: #1e3a8a;
+        stroke: none;
+      }
+      .logo-tagline {
+        font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+        font-weight: 500;
+        font-size: 11px;
+        letter-spacing: 4px;
+        fill: #1e3a8a;
+        text-transform: uppercase;
+      }
+    </style>
+  </defs>
+  
+  <!-- ALETHEIA Text with segmented/cut-out effect -->
+  <g transform="translate(20, 20)">
+    <!-- A (with segmented crossbar) -->
+    <path d="M 0 50 L 9 0 L 18 0 L 27 50 L 22 50 L 20 38 L 7 38 L 5 50 Z" class="logo-main"/>
+    <line x1="9" y1="22" x2="18" y2="22" stroke="#1e3a8a" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+    
+    <!-- L -->
+    <path d="M 35 0 L 44 0 L 44 50 L 39 50 L 39 5 L 35 5 Z" class="logo-main"/>
+    
+    <!-- E (segmented - middle bar detached) -->
+    <path d="M 52 0 L 56 0 L 56 50 L 52 50 Z" class="logo-main"/>
+    <line x1="56" y1="0" x2="68" y2="0" stroke="#1e3a8a" stroke-width="5" stroke-linecap="round"/>
+    <line x1="56" y1="25" x2="66" y2="25" stroke="#1e3a8a" stroke-width="5" stroke-linecap="round"/>
+    <line x1="56" y1="50" x2="68" y2="50" stroke="#1e3a8a" stroke-width="5" stroke-linecap="round"/>
+    
+    <!-- T -->
+    <path d="M 76 0 L 96 0 L 96 5 L 88 5 L 88 50 L 84 50 L 84 5 L 76 5 Z" class="logo-main"/>
+    
+    <!-- H (with segmented middle bar) -->
+    <path d="M 104 0 L 109 0 L 109 22 L 121 22 L 121 0 L 126 0 L 126 50 L 121 50 L 121 28 L 109 28 L 109 50 L 104 50 Z" class="logo-main"/>
+    <line x1="109" y1="22" x2="121" y2="22" stroke="#1e3a8a" stroke-width="5" stroke-linecap="round"/>
+    
+    <!-- E (segmented - middle bar detached) -->
+    <path d="M 134 0 L 138 0 L 138 50 L 134 50 Z" class="logo-main"/>
+    <line x1="138" y1="0" x2="150" y2="0" stroke="#1e3a8a" stroke-width="5" stroke-linecap="round"/>
+    <line x1="138" y1="25" x2="148" y2="25" stroke="#1e3a8a" stroke-width="5" stroke-linecap="round"/>
+    <line x1="138" y1="50" x2="150" y2="50" stroke="#1e3a8a" stroke-width="5" stroke-linecap="round"/>
+    
+    <!-- I -->
+    <path d="M 158 0 L 168 0 L 168 50 L 158 50 Z" class="logo-main"/>
+    
+    <!-- A (with segmented crossbar) -->
+    <path d="M 176 50 L 185 0 L 194 0 L 203 50 L 198 50 L 196 38 L 183 38 L 181 50 Z" class="logo-main"/>
+    <line x1="185" y1="22" x2="194" y2="22" stroke="#1e3a8a" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+  
+  <!-- Tagline: REVEALING THE HIDDEN PROFILE -->
+  <text x="200" y="100" text-anchor="middle" class="logo-tagline">REVEALING THE HIDDEN PROFILE</text>
+</svg>

@@ -20,7 +20,7 @@ import {
   MessageCircle,
   Users
 } from 'lucide-react';
-import nativeLogo from '../native-logo.png';
+import aletheiaLogo from '../aletheia-logo.png';
 import { useAuth } from '../contexts/AuthContext';
 
 const Layout: React.FC = () => {
@@ -69,8 +69,7 @@ const Layout: React.FC = () => {
       {/* Sidebar */}
       <aside className="w-64 bg-white border-r border-gray-200 flex flex-col z-10 shadow-sm">
         <div className="p-5 border-b border-gray-100 flex flex-col items-center">
-          <img src={nativeLogo} alt="Native AI Logo" className="w-40 h-auto mb-2" />
-          <span className="font-bold text-gray-800 text-sm tracking-tight">SAV Insight</span>
+          <img src={aletheiaLogo} alt="Aletheia Logo" className="w-40 h-auto" />
         </div>
         
         <nav className="flex-1 p-4 space-y-1">
@@ -117,7 +116,7 @@ const Layout: React.FC = () => {
               <CheckSquare size={14} className="text-blue-600" />
               <span className="text-xs font-semibold text-blue-600 uppercase tracking-wider">AI Powered</span>
             </div>
-            <p className="text-sm text-gray-700 font-medium">Native AI</p>
+            <p className="text-sm text-gray-700 font-medium">Aletheia</p>
             <p className="text-xs text-gray-500 mt-1">Smart filter suggestions</p>
           </div>
         </div>

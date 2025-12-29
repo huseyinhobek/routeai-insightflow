@@ -1,6 +1,6 @@
 """
 Email service for sending verification codes and notifications
-Native Insight Studio - Professional Email Templates
+Aletheia - Professional Email Templates
 """
 import smtplib
 import os
@@ -16,25 +16,25 @@ SMTP_HOST = os.getenv("SMTP_HOST", "")
 SMTP_PORT = int(os.getenv("SMTP_PORT", "587"))
 SMTP_USER = os.getenv("SMTP_USER", "")
 SMTP_PASSWORD = os.getenv("SMTP_PASSWORD", "")
-EMAIL_FROM = os.getenv("EMAIL_FROM", "Native Insight Studio <noreply@nativeag.io>")
+EMAIL_FROM = os.getenv("EMAIL_FROM", "Aletheia <noreply@aletheia.ai>")
 EMAIL_ENABLED = os.getenv("EMAIL_ENABLED", "false").lower() == "true"
 
 # Branding
-BRAND_NAME = "Native Insight Studio"
+BRAND_NAME = "Aletheia"
 BRAND_COLOR_PRIMARY = "#2563EB"
 BRAND_COLOR_SECONDARY = "#4F46E5"
 BRAND_COLOR_DARK = "#1E3A8A"
-COMPANY_NAME = "Native AI"
-COMPANY_WEBSITE = "https://nativeag.io"
+COMPANY_NAME = "Aletheia"
+COMPANY_WEBSITE = "https://aletheia.ai"
 CURRENT_YEAR = "2024"
 
 # Logo URL - hosted on the frontend (public folder, no hash)
 APP_BASE_URL = os.getenv("APP_BASE_URL", "https://n8n.n0ps.net/sav-insight")
-LOGO_URL = f"{APP_BASE_URL}/native-logo.png"
+LOGO_URL = f"{APP_BASE_URL}/aletheia-logo.png"
 
 
 def _get_email_header() -> str:
-    """Professional email header with Native AI branding and logo"""
+    """Professional email header with Aletheia branding and logo"""
     return f"""
     <div style="background: linear-gradient(135deg, {BRAND_COLOR_PRIMARY}, {BRAND_COLOR_SECONDARY}); padding: 32px 20px; text-align: center; border-radius: 12px 12px 0 0;">
         <table width="100%" cellpadding="0" cellspacing="0" border="0">

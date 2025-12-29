@@ -190,7 +190,7 @@ async def invite_user(
     db.refresh(new_user)
     
     # Get org name
-    org_name = "Native Insight Studio"
+    org_name = "Aletheia"
     if user.org_id:
         org = db.query(Organization).filter(Organization.id == user.org_id).first()
         if org:
@@ -756,7 +756,7 @@ async def send_user_credentials(
     db.commit()
     
     # Get organization name
-    org_name = "Native Insight Studio"
+    org_name = "Aletheia"
     if target_user.org_id:
         org = db.query(Organization).filter(Organization.id == target_user.org_id).first()
         if org:
@@ -836,7 +836,7 @@ async def bulk_send_credentials(
         db.commit()
         
         # Get organization name
-        org_name = "Native Insight Studio"
+        org_name = "Aletheia"
         if target_user.org_id:
             org = db.query(Organization).filter(Organization.id == target_user.org_id).first()
             if org:

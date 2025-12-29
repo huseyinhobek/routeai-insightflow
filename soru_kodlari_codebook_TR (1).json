@@ -1,0 +1,1966 @@
+{
+  "meta": {
+    "dataset_name": "TR_Ornek_Anket_100x100",
+    "language": "tr",
+    "created_at": "2025-12-29",
+    "respondents": 100,
+    "base_questions": 100,
+    "columns_in_data": 129,
+    "missing_value": null,
+    "notes": "Örnek/temsilî veri seti. Çoklu sorular (multi) binary alt sütunlara ayrılmıştır. Koşullu sorular: S17, S33, R04 sadece iade yapanlarda (S16_IADE_YAPTI==1) doludur."
+  },
+  "questions": [
+    {
+      "code": "D01_YAS",
+      "type": "numeric",
+      "text": "Yaşınız kaç?",
+      "range": {
+        "min": 18,
+        "max": 65
+      },
+      "unit": "yıl",
+      "base": "all",
+      "allow_na": true
+    },
+    {
+      "code": "D02_CINSIYET",
+      "type": "single",
+      "text": "Cinsiyetiniz nedir?",
+      "options": {
+        "1": "Erkek",
+        "2": "Kadın",
+        "3": "Belirtmek istemiyorum"
+      },
+      "base": "all",
+      "allow_na": true
+    },
+    {
+      "code": "D03_BOLGE",
+      "type": "single",
+      "text": "Hangi bölgede yaşıyorsunuz?",
+      "options": {
+        "1": "Marmara",
+        "2": "Ege",
+        "3": "Akdeniz",
+        "4": "İç Anadolu",
+        "5": "Karadeniz",
+        "6": "Doğu Anadolu",
+        "7": "Güneydoğu Anadolu"
+      },
+      "base": "all",
+      "allow_na": true
+    },
+    {
+      "code": "D04_SEHIR",
+      "type": "single",
+      "text": "Yaşadığınız il hangisi?",
+      "options": {
+        "1": "İstanbul",
+        "2": "Ankara",
+        "3": "İzmir",
+        "4": "Bursa",
+        "5": "Antalya",
+        "6": "Adana",
+        "7": "Konya",
+        "8": "Gaziantep",
+        "9": "Kocaeli",
+        "10": "Mersin",
+        "11": "Kayseri",
+        "12": "Samsun",
+        "13": "Trabzon",
+        "14": "Eskişehir",
+        "15": "Diyarbakır"
+      },
+      "base": "all",
+      "allow_na": true
+    },
+    {
+      "code": "D05_EGITIM",
+      "type": "single",
+      "text": "En yüksek tamamladığınız eğitim düzeyi nedir?",
+      "options": {
+        "1": "İlkokul",
+        "2": "Ortaokul",
+        "3": "Lise",
+        "4": "Ön lisans",
+        "5": "Lisans",
+        "6": "Yüksek lisans/Doktora"
+      },
+      "base": "all",
+      "allow_na": true
+    },
+    {
+      "code": "D06_CALISMA",
+      "type": "single",
+      "text": "Çalışma durumunuz nedir?",
+      "options": {
+        "1": "Tam zamanlı",
+        "2": "Yarı zamanlı",
+        "3": "Serbest/Esnaf",
+        "4": "Öğrenci",
+        "5": "İşsiz",
+        "6": "Emekli"
+      },
+      "base": "all",
+      "allow_na": true
+    },
+    {
+      "code": "D07_GELIR",
+      "type": "single",
+      "text": "Aylık hane geliri aralığınız nedir?",
+      "options": {
+        "1": "0-20.000 TL",
+        "2": "20.001-40.000 TL",
+        "3": "40.001-70.000 TL",
+        "4": "70.001-120.000 TL",
+        "5": "120.001 TL+"
+      },
+      "base": "all",
+      "allow_na": true
+    },
+    {
+      "code": "D08_EVDE_KIM",
+      "type": "single",
+      "text": "Hane yapınız hangisine en uygun?",
+      "options": {
+        "1": "Tek yaşıyorum",
+        "2": "Eş/partner ile",
+        "3": "Çocuklu aile",
+        "4": "Ebeveyn/akraba ile",
+        "5": "Diğer"
+      },
+      "base": "all",
+      "allow_na": true
+    },
+    {
+      "code": "D09_HANE_KISI",
+      "type": "numeric",
+      "text": "Hanede kaç kişi yaşıyor?",
+      "range": {
+        "min": 1,
+        "max": 8
+      },
+      "unit": "kişi",
+      "base": "all",
+      "allow_na": true
+    },
+    {
+      "code": "D10_INTERNET_SAAT",
+      "type": "numeric",
+      "text": "Günde ortalama kaç saat internette vakit geçiriyorsunuz?",
+      "range": {
+        "min": 0,
+        "max": 16
+      },
+      "unit": "saat",
+      "base": "all",
+      "allow_na": true
+    },
+    {
+      "code": "S01_KATEGORI",
+      "type": "single",
+      "text": "Son 3 ayda en çok hangi kategoriden alışveriş yaptınız?",
+      "options": {
+        "1": "Market/Gıda",
+        "2": "Giyim",
+        "3": "Elektronik",
+        "4": "Kozmetik/Kişisel bakım",
+        "5": "Ev & Yaşam",
+        "6": "Hizmet (tamir, temizlik vb.)",
+        "7": "Diğer"
+      },
+      "base": "all",
+      "allow_na": true
+    },
+    {
+      "code": "S02_ALISVERIS_KANAL",
+      "type": "single",
+      "text": "Alışverişlerinizin çoğunu hangi kanaldan yaparsınız?",
+      "options": {
+        "1": "Fiziksel mağaza",
+        "2": "Online pazar yeri",
+        "3": "Markanın kendi sitesi",
+        "4": "Sosyal medya",
+        "5": "Diğer"
+      },
+      "base": "all",
+      "allow_na": true
+    },
+    {
+      "code": "S03_ODEME",
+      "type": "single",
+      "text": "En sık kullandığınız ödeme yöntemi?",
+      "options": {
+        "1": "Kredi kartı",
+        "2": "Banka kartı",
+        "3": "Havale/EFT",
+        "4": "Kapıda ödeme",
+        "5": "Dijital cüzdan",
+        "6": "Diğer"
+      },
+      "base": "all",
+      "allow_na": true
+    },
+    {
+      "code": "S04_TESLIMAT",
+      "type": "single",
+      "text": "Online alışverişte teslimat hızı beklentiniz?",
+      "options": {
+        "1": "Aynı gün",
+        "2": "1-2 gün",
+        "3": "3-5 gün",
+        "4": "1 haftadan uzun",
+        "5": "Önemli değil"
+      },
+      "base": "all",
+      "allow_na": true
+    },
+    {
+      "code": "S05_FIYAT_DUYARLILIK",
+      "type": "single",
+      "text": "Fiyat artışı karşısında davranışınız?",
+      "options": {
+        "1": "Markayı hemen değiştiririm",
+        "2": "İndirim beklerim",
+        "3": "Daha az alırım",
+        "4": "Aynı devam ederim",
+        "5": "Kararsızım"
+      },
+      "base": "all",
+      "allow_na": true
+    },
+    {
+      "code": "S06_MARKA_SADAKAT",
+      "type": "single",
+      "text": "Genelde bir markaya ne kadar sadıksınız?",
+      "options": {
+        "1": "Hiç sadık değilim",
+        "2": "Az sadığım",
+        "3": "Orta",
+        "4": "Sadığım",
+        "5": "Çok sadığım"
+      },
+      "base": "all",
+      "allow_na": true
+    },
+    {
+      "code": "S07_KAMPANYA",
+      "type": "single",
+      "text": "Kampanya/indirim görürseniz satın alma olasılığınız?",
+      "options": {
+        "1": "Çok azalır",
+        "2": "Azalır",
+        "3": "Değişmez",
+        "4": "Artar",
+        "5": "Çok artar"
+      },
+      "base": "all",
+      "allow_na": true
+    },
+    {
+      "code": "S08_IADE_ONEM",
+      "type": "single",
+      "text": "İade süreci sizin için ne kadar önemli?",
+      "options": {
+        "1": "Hiç önemli değil",
+        "2": "Az önemli",
+        "3": "Orta",
+        "4": "Önemli",
+        "5": "Çok önemli"
+      },
+      "base": "all",
+      "allow_na": true
+    },
+    {
+      "code": "S09_MUSTERI_HIZMET",
+      "type": "single",
+      "text": "Müşteri hizmetlerine erişim sizin için ne kadar önemli?",
+      "options": {
+        "1": "Hiç",
+        "2": "Az",
+        "3": "Orta",
+        "4": "Önemli",
+        "5": "Çok önemli"
+      },
+      "base": "all",
+      "allow_na": true
+    },
+    {
+      "code": "S10_SURDUR",
+      "type": "single",
+      "text": "Sürdürülebilir/çevre dostu ürün tercih etme düzeyiniz?",
+      "options": {
+        "1": "Hiç",
+        "2": "Az",
+        "3": "Orta",
+        "4": "Yüksek",
+        "5": "Çok yüksek"
+      },
+      "base": "all",
+      "allow_na": true
+    },
+    {
+      "code": "M01_BILGI_KAYNAK",
+      "type": "multi",
+      "text": "Bir ürün/hizmet hakkında bilgi alırken hangilerini kullanırsınız? (Birden fazla)",
+      "options": {
+        "A": "Google araması",
+        "B": "Sosyal medya",
+        "C": "Arkadaş/akraba önerisi",
+        "D": "Pazar yeri yorumları",
+        "E": "YouTube incelemeleri",
+        "F": "Karşılaştırma siteleri",
+        "G": "Mağaza personeli"
+      },
+      "storage": "binary_columns",
+      "base": "all",
+      "allow_na": true,
+      "derived_columns": {
+        "M01_BILGI_KAYNAK_A": {
+          "label": "Google araması",
+          "value_coding": {
+            "0": "Seçilmedi",
+            "1": "Seçildi"
+          }
+        },
+        "M01_BILGI_KAYNAK_B": {
+          "label": "Sosyal medya",
+          "value_coding": {
+            "0": "Seçilmedi",
+            "1": "Seçildi"
+          }
+        },
+        "M01_BILGI_KAYNAK_C": {
+          "label": "Arkadaş/akraba önerisi",
+          "value_coding": {
+            "0": "Seçilmedi",
+            "1": "Seçildi"
+          }
+        },
+        "M01_BILGI_KAYNAK_D": {
+          "label": "Pazar yeri yorumları",
+          "value_coding": {
+            "0": "Seçilmedi",
+            "1": "Seçildi"
+          }
+        },
+        "M01_BILGI_KAYNAK_E": {
+          "label": "YouTube incelemeleri",
+          "value_coding": {
+            "0": "Seçilmedi",
+            "1": "Seçildi"
+          }
+        },
+        "M01_BILGI_KAYNAK_F": {
+          "label": "Karşılaştırma siteleri",
+          "value_coding": {
+            "0": "Seçilmedi",
+            "1": "Seçildi"
+          }
+        },
+        "M01_BILGI_KAYNAK_G": {
+          "label": "Mağaza personeli",
+          "value_coding": {
+            "0": "Seçilmedi",
+            "1": "Seçildi"
+          }
+        }
+      }
+    },
+    {
+      "code": "M02_SOSYAL_PLAT",
+      "type": "multi",
+      "text": "Aktif kullandığınız sosyal platformlar hangileri? (Birden fazla)",
+      "options": {
+        "A": "Instagram",
+        "B": "TikTok",
+        "C": "X/Twitter",
+        "D": "Facebook",
+        "E": "YouTube",
+        "F": "LinkedIn",
+        "G": "Diğer"
+      },
+      "storage": "binary_columns",
+      "base": "all",
+      "allow_na": true,
+      "derived_columns": {
+        "M02_SOSYAL_PLAT_A": {
+          "label": "Instagram",
+          "value_coding": {
+            "0": "Seçilmedi",
+            "1": "Seçildi"
+          }
+        },
+        "M02_SOSYAL_PLAT_B": {
+          "label": "TikTok",
+          "value_coding": {
+            "0": "Seçilmedi",
+            "1": "Seçildi"
+          }
+        },
+        "M02_SOSYAL_PLAT_C": {
+          "label": "X/Twitter",
+          "value_coding": {
+            "0": "Seçilmedi",
+            "1": "Seçildi"
+          }
+        },
+        "M02_SOSYAL_PLAT_D": {
+          "label": "Facebook",
+          "value_coding": {
+            "0": "Seçilmedi",
+            "1": "Seçildi"
+          }
+        },
+        "M02_SOSYAL_PLAT_E": {
+          "label": "YouTube",
+          "value_coding": {
+            "0": "Seçilmedi",
+            "1": "Seçildi"
+          }
+        },
+        "M02_SOSYAL_PLAT_F": {
+          "label": "LinkedIn",
+          "value_coding": {
+            "0": "Seçilmedi",
+            "1": "Seçildi"
+          }
+        },
+        "M02_SOSYAL_PLAT_G": {
+          "label": "Diğer",
+          "value_coding": {
+            "0": "Seçilmedi",
+            "1": "Seçildi"
+          }
+        }
+      }
+    },
+    {
+      "code": "M03_SATIN_ALMA_NEDEN",
+      "type": "multi",
+      "text": "Son satın alımınızda etkili olan faktörler hangileriydi? (Birden fazla)",
+      "options": {
+        "A": "Fiyat",
+        "B": "Kalite",
+        "C": "Marka",
+        "D": "Kampanya",
+        "E": "Teslimat hızı",
+        "F": "Yorum/puan",
+        "G": "İade kolaylığı"
+      },
+      "storage": "binary_columns",
+      "base": "all",
+      "allow_na": true,
+      "derived_columns": {
+        "M03_SATIN_ALMA_NEDEN_A": {
+          "label": "Fiyat",
+          "value_coding": {
+            "0": "Seçilmedi",
+            "1": "Seçildi"
+          }
+        },
+        "M03_SATIN_ALMA_NEDEN_B": {
+          "label": "Kalite",
+          "value_coding": {
+            "0": "Seçilmedi",
+            "1": "Seçildi"
+          }
+        },
+        "M03_SATIN_ALMA_NEDEN_C": {
+          "label": "Marka",
+          "value_coding": {
+            "0": "Seçilmedi",
+            "1": "Seçildi"
+          }
+        },
+        "M03_SATIN_ALMA_NEDEN_D": {
+          "label": "Kampanya",
+          "value_coding": {
+            "0": "Seçilmedi",
+            "1": "Seçildi"
+          }
+        },
+        "M03_SATIN_ALMA_NEDEN_E": {
+          "label": "Teslimat hızı",
+          "value_coding": {
+            "0": "Seçilmedi",
+            "1": "Seçildi"
+          }
+        },
+        "M03_SATIN_ALMA_NEDEN_F": {
+          "label": "Yorum/puan",
+          "value_coding": {
+            "0": "Seçilmedi",
+            "1": "Seçildi"
+          }
+        },
+        "M03_SATIN_ALMA_NEDEN_G": {
+          "label": "İade kolaylığı",
+          "value_coding": {
+            "0": "Seçilmedi",
+            "1": "Seçildi"
+          }
+        }
+      }
+    },
+    {
+      "code": "M04_SIKAYET_KANAL",
+      "type": "multi",
+      "text": "Sorun yaşadığınızda hangi kanallardan şikayet edersiniz? (Birden fazla)",
+      "options": {
+        "A": "Çağrı merkezi",
+        "B": "Canlı destek",
+        "C": "E-posta",
+        "D": "Sosyal medya",
+        "E": "Şikayet platformları",
+        "F": "Şikayet etmem"
+      },
+      "storage": "binary_columns",
+      "base": "all",
+      "allow_na": true,
+      "derived_columns": {
+        "M04_SIKAYET_KANAL_A": {
+          "label": "Çağrı merkezi",
+          "value_coding": {
+            "0": "Seçilmedi",
+            "1": "Seçildi"
+          }
+        },
+        "M04_SIKAYET_KANAL_B": {
+          "label": "Canlı destek",
+          "value_coding": {
+            "0": "Seçilmedi",
+            "1": "Seçildi"
+          }
+        },
+        "M04_SIKAYET_KANAL_C": {
+          "label": "E-posta",
+          "value_coding": {
+            "0": "Seçilmedi",
+            "1": "Seçildi"
+          }
+        },
+        "M04_SIKAYET_KANAL_D": {
+          "label": "Sosyal medya",
+          "value_coding": {
+            "0": "Seçilmedi",
+            "1": "Seçildi"
+          }
+        },
+        "M04_SIKAYET_KANAL_E": {
+          "label": "Şikayet platformları",
+          "value_coding": {
+            "0": "Seçilmedi",
+            "1": "Seçildi"
+          }
+        },
+        "M04_SIKAYET_KANAL_F": {
+          "label": "Şikayet etmem",
+          "value_coding": {
+            "0": "Seçilmedi",
+            "1": "Seçildi"
+          }
+        }
+      }
+    },
+    {
+      "code": "M05_URUN_TIPI",
+      "type": "multi",
+      "text": "En sık satın aldığınız ürün türleri? (Birden fazla)",
+      "options": {
+        "A": "Temel ihtiyaç",
+        "B": "Teknoloji",
+        "C": "Moda",
+        "D": "Ev eşyası",
+        "E": "Kozmetik",
+        "F": "Hobi/oyun",
+        "G": "Diğer"
+      },
+      "storage": "binary_columns",
+      "base": "all",
+      "allow_na": true,
+      "derived_columns": {
+        "M05_URUN_TIPI_A": {
+          "label": "Temel ihtiyaç",
+          "value_coding": {
+            "0": "Seçilmedi",
+            "1": "Seçildi"
+          }
+        },
+        "M05_URUN_TIPI_B": {
+          "label": "Teknoloji",
+          "value_coding": {
+            "0": "Seçilmedi",
+            "1": "Seçildi"
+          }
+        },
+        "M05_URUN_TIPI_C": {
+          "label": "Moda",
+          "value_coding": {
+            "0": "Seçilmedi",
+            "1": "Seçildi"
+          }
+        },
+        "M05_URUN_TIPI_D": {
+          "label": "Ev eşyası",
+          "value_coding": {
+            "0": "Seçilmedi",
+            "1": "Seçildi"
+          }
+        },
+        "M05_URUN_TIPI_E": {
+          "label": "Kozmetik",
+          "value_coding": {
+            "0": "Seçilmedi",
+            "1": "Seçildi"
+          }
+        },
+        "M05_URUN_TIPI_F": {
+          "label": "Hobi/oyun",
+          "value_coding": {
+            "0": "Seçilmedi",
+            "1": "Seçildi"
+          }
+        },
+        "M05_URUN_TIPI_G": {
+          "label": "Diğer",
+          "value_coding": {
+            "0": "Seçilmedi",
+            "1": "Seçildi"
+          }
+        }
+      }
+    },
+    {
+      "code": "M06_ABONELIK",
+      "type": "multi",
+      "text": "Aktif abonelikleriniz var mı? (Birden fazla)",
+      "options": {
+        "A": "Video (Netflix vb.)",
+        "B": "Müzik (Spotify vb.)",
+        "C": "Oyun",
+        "D": "Bulut depolama",
+        "E": "Gazete/dergi",
+        "F": "Yok"
+      },
+      "storage": "binary_columns",
+      "base": "all",
+      "allow_na": true,
+      "derived_columns": {
+        "M06_ABONELIK_A": {
+          "label": "Video (Netflix vb.)",
+          "value_coding": {
+            "0": "Seçilmedi",
+            "1": "Seçildi"
+          }
+        },
+        "M06_ABONELIK_B": {
+          "label": "Müzik (Spotify vb.)",
+          "value_coding": {
+            "0": "Seçilmedi",
+            "1": "Seçildi"
+          }
+        },
+        "M06_ABONELIK_C": {
+          "label": "Oyun",
+          "value_coding": {
+            "0": "Seçilmedi",
+            "1": "Seçildi"
+          }
+        },
+        "M06_ABONELIK_D": {
+          "label": "Bulut depolama",
+          "value_coding": {
+            "0": "Seçilmedi",
+            "1": "Seçildi"
+          }
+        },
+        "M06_ABONELIK_E": {
+          "label": "Gazete/dergi",
+          "value_coding": {
+            "0": "Seçilmedi",
+            "1": "Seçildi"
+          }
+        },
+        "M06_ABONELIK_F": {
+          "label": "Yok",
+          "value_coding": {
+            "0": "Seçilmedi",
+            "1": "Seçildi"
+          }
+        }
+      }
+    },
+    {
+      "code": "M07_GUVEN_ETMEN",
+      "type": "multi",
+      "text": "Bir markaya güven duymanızı sağlayan unsurlar? (Birden fazla)",
+      "options": {
+        "A": "Şeffaf fiyat",
+        "B": "Kolay iade",
+        "C": "Güçlü müşteri hizmeti",
+        "D": "Kalite belgesi/sertifika",
+        "E": "Yüksek puan/yorum",
+        "F": "Tanınmış marka",
+        "G": "Arkadaş önerisi"
+      },
+      "storage": "binary_columns",
+      "base": "all",
+      "allow_na": true,
+      "derived_columns": {
+        "M07_GUVEN_ETMEN_A": {
+          "label": "Şeffaf fiyat",
+          "value_coding": {
+            "0": "Seçilmedi",
+            "1": "Seçildi"
+          }
+        },
+        "M07_GUVEN_ETMEN_B": {
+          "label": "Kolay iade",
+          "value_coding": {
+            "0": "Seçilmedi",
+            "1": "Seçildi"
+          }
+        },
+        "M07_GUVEN_ETMEN_C": {
+          "label": "Güçlü müşteri hizmeti",
+          "value_coding": {
+            "0": "Seçilmedi",
+            "1": "Seçildi"
+          }
+        },
+        "M07_GUVEN_ETMEN_D": {
+          "label": "Kalite belgesi/sertifika",
+          "value_coding": {
+            "0": "Seçilmedi",
+            "1": "Seçildi"
+          }
+        },
+        "M07_GUVEN_ETMEN_E": {
+          "label": "Yüksek puan/yorum",
+          "value_coding": {
+            "0": "Seçilmedi",
+            "1": "Seçildi"
+          }
+        },
+        "M07_GUVEN_ETMEN_F": {
+          "label": "Tanınmış marka",
+          "value_coding": {
+            "0": "Seçilmedi",
+            "1": "Seçildi"
+          }
+        },
+        "M07_GUVEN_ETMEN_G": {
+          "label": "Arkadaş önerisi",
+          "value_coding": {
+            "0": "Seçilmedi",
+            "1": "Seçildi"
+          }
+        }
+      }
+    },
+    {
+      "code": "M08_REKLAM_KANAL",
+      "type": "multi",
+      "text": "Son 30 günde reklama en çok nerede maruz kaldınız? (Birden fazla)",
+      "options": {
+        "A": "TV",
+        "B": "YouTube",
+        "C": "Instagram",
+        "D": "TikTok",
+        "E": "Arama reklamı",
+        "F": "Açık hava",
+        "G": "Podcast/Spotify"
+      },
+      "storage": "binary_columns",
+      "base": "all",
+      "allow_na": true,
+      "derived_columns": {
+        "M08_REKLAM_KANAL_A": {
+          "label": "TV",
+          "value_coding": {
+            "0": "Seçilmedi",
+            "1": "Seçildi"
+          }
+        },
+        "M08_REKLAM_KANAL_B": {
+          "label": "YouTube",
+          "value_coding": {
+            "0": "Seçilmedi",
+            "1": "Seçildi"
+          }
+        },
+        "M08_REKLAM_KANAL_C": {
+          "label": "Instagram",
+          "value_coding": {
+            "0": "Seçilmedi",
+            "1": "Seçildi"
+          }
+        },
+        "M08_REKLAM_KANAL_D": {
+          "label": "TikTok",
+          "value_coding": {
+            "0": "Seçilmedi",
+            "1": "Seçildi"
+          }
+        },
+        "M08_REKLAM_KANAL_E": {
+          "label": "Arama reklamı",
+          "value_coding": {
+            "0": "Seçilmedi",
+            "1": "Seçildi"
+          }
+        },
+        "M08_REKLAM_KANAL_F": {
+          "label": "Açık hava",
+          "value_coding": {
+            "0": "Seçilmedi",
+            "1": "Seçildi"
+          }
+        },
+        "M08_REKLAM_KANAL_G": {
+          "label": "Podcast/Spotify",
+          "value_coding": {
+            "0": "Seçilmedi",
+            "1": "Seçildi"
+          }
+        }
+      }
+    },
+    {
+      "code": "M09_CIHAZ",
+      "type": "multi",
+      "text": "İnternete en çok hangi cihazlardan giriyorsunuz? (Birden fazla)",
+      "options": {
+        "A": "Telefon",
+        "B": "Laptop",
+        "C": "Masaüstü",
+        "D": "Tablet",
+        "E": "Akıllı TV",
+        "F": "Oyun konsolu"
+      },
+      "storage": "binary_columns",
+      "base": "all",
+      "allow_na": true,
+      "derived_columns": {
+        "M09_CIHAZ_A": {
+          "label": "Telefon",
+          "value_coding": {
+            "0": "Seçilmedi",
+            "1": "Seçildi"
+          }
+        },
+        "M09_CIHAZ_B": {
+          "label": "Laptop",
+          "value_coding": {
+            "0": "Seçilmedi",
+            "1": "Seçildi"
+          }
+        },
+        "M09_CIHAZ_C": {
+          "label": "Masaüstü",
+          "value_coding": {
+            "0": "Seçilmedi",
+            "1": "Seçildi"
+          }
+        },
+        "M09_CIHAZ_D": {
+          "label": "Tablet",
+          "value_coding": {
+            "0": "Seçilmedi",
+            "1": "Seçildi"
+          }
+        },
+        "M09_CIHAZ_E": {
+          "label": "Akıllı TV",
+          "value_coding": {
+            "0": "Seçilmedi",
+            "1": "Seçildi"
+          }
+        },
+        "M09_CIHAZ_F": {
+          "label": "Oyun konsolu",
+          "value_coding": {
+            "0": "Seçilmedi",
+            "1": "Seçildi"
+          }
+        }
+      }
+    },
+    {
+      "code": "M10_IYILESTIRME",
+      "type": "multi",
+      "text": "Bir pazar yerinde iyileştirilmesini istediğiniz alanlar? (Birden fazla)",
+      "options": {
+        "A": "Arama/filtre",
+        "B": "Ürün açıklamaları",
+        "C": "Yorum kalitesi",
+        "D": "Satıcı güvenilirliği",
+        "E": "Kargo/teslimat",
+        "F": "İade/geri ödeme",
+        "G": "Fiyat şeffaflığı"
+      },
+      "storage": "binary_columns",
+      "base": "all",
+      "allow_na": true,
+      "derived_columns": {
+        "M10_IYILESTIRME_A": {
+          "label": "Arama/filtre",
+          "value_coding": {
+            "0": "Seçilmedi",
+            "1": "Seçildi"
+          }
+        },
+        "M10_IYILESTIRME_B": {
+          "label": "Ürün açıklamaları",
+          "value_coding": {
+            "0": "Seçilmedi",
+            "1": "Seçildi"
+          }
+        },
+        "M10_IYILESTIRME_C": {
+          "label": "Yorum kalitesi",
+          "value_coding": {
+            "0": "Seçilmedi",
+            "1": "Seçildi"
+          }
+        },
+        "M10_IYILESTIRME_D": {
+          "label": "Satıcı güvenilirliği",
+          "value_coding": {
+            "0": "Seçilmedi",
+            "1": "Seçildi"
+          }
+        },
+        "M10_IYILESTIRME_E": {
+          "label": "Kargo/teslimat",
+          "value_coding": {
+            "0": "Seçilmedi",
+            "1": "Seçildi"
+          }
+        },
+        "M10_IYILESTIRME_F": {
+          "label": "İade/geri ödeme",
+          "value_coding": {
+            "0": "Seçilmedi",
+            "1": "Seçildi"
+          }
+        },
+        "M10_IYILESTIRME_G": {
+          "label": "Fiyat şeffaflığı",
+          "value_coding": {
+            "0": "Seçilmedi",
+            "1": "Seçildi"
+          }
+        }
+      }
+    },
+    {
+      "code": "L01",
+      "type": "scale",
+      "text": "Online alışverişte arama ve filtreler yeterince anlaşılırdır.",
+      "scale": {
+        "min": 1,
+        "max": 5,
+        "labels": {
+          "1": "Kesinlikle katılmıyorum",
+          "2": "Katılmıyorum",
+          "3": "Ne katılıyorum ne katılmıyorum",
+          "4": "Katılıyorum",
+          "5": "Kesinlikle katılıyorum"
+        }
+      },
+      "base": "all",
+      "allow_na": true
+    },
+    {
+      "code": "L02",
+      "type": "scale",
+      "text": "Ürün fotoğrafları karar vermem için yeterlidir.",
+      "scale": {
+        "min": 1,
+        "max": 5,
+        "labels": {
+          "1": "Kesinlikle katılmıyorum",
+          "2": "Katılmıyorum",
+          "3": "Ne katılıyorum ne katılmıyorum",
+          "4": "Katılıyorum",
+          "5": "Kesinlikle katılıyorum"
+        }
+      },
+      "base": "all",
+      "allow_na": true
+    },
+    {
+      "code": "L03",
+      "type": "scale",
+      "text": "Ürün açıklamaları çoğu zaman yeterince detaylıdır.",
+      "scale": {
+        "min": 1,
+        "max": 5,
+        "labels": {
+          "1": "Kesinlikle katılmıyorum",
+          "2": "Katılmıyorum",
+          "3": "Ne katılıyorum ne katılmıyorum",
+          "4": "Katılıyorum",
+          "5": "Kesinlikle katılıyorum"
+        }
+      },
+      "base": "all",
+      "allow_na": true
+    },
+    {
+      "code": "L04",
+      "type": "scale",
+      "text": "Yorumlar satın alma kararımı güçlü biçimde etkiler.",
+      "scale": {
+        "min": 1,
+        "max": 5,
+        "labels": {
+          "1": "Kesinlikle katılmıyorum",
+          "2": "Katılmıyorum",
+          "3": "Ne katılıyorum ne katılmıyorum",
+          "4": "Katılıyorum",
+          "5": "Kesinlikle katılıyorum"
+        }
+      },
+      "base": "all",
+      "allow_na": true
+    },
+    {
+      "code": "L05",
+      "type": "scale",
+      "text": "Puanlama sistemi genelde güvenilirdir.",
+      "scale": {
+        "min": 1,
+        "max": 5,
+        "labels": {
+          "1": "Kesinlikle katılmıyorum",
+          "2": "Katılmıyorum",
+          "3": "Ne katılıyorum ne katılmıyorum",
+          "4": "Katılıyorum",
+          "5": "Kesinlikle katılıyorum"
+        }
+      },
+      "base": "all",
+      "allow_na": true
+    },
+    {
+      "code": "L06",
+      "type": "scale",
+      "text": "Kargo süreci şeffaf takip edilebilir.",
+      "scale": {
+        "min": 1,
+        "max": 5,
+        "labels": {
+          "1": "Kesinlikle katılmıyorum",
+          "2": "Katılmıyorum",
+          "3": "Ne katılıyorum ne katılmıyorum",
+          "4": "Katılıyorum",
+          "5": "Kesinlikle katılıyorum"
+        }
+      },
+      "base": "all",
+      "allow_na": true
+    },
+    {
+      "code": "L07",
+      "type": "scale",
+      "text": "İade süreci kolay ve sorunsuzdur.",
+      "scale": {
+        "min": 1,
+        "max": 5,
+        "labels": {
+          "1": "Kesinlikle katılmıyorum",
+          "2": "Katılmıyorum",
+          "3": "Ne katılıyorum ne katılmıyorum",
+          "4": "Katılıyorum",
+          "5": "Kesinlikle katılıyorum"
+        }
+      },
+      "base": "all",
+      "allow_na": true
+    },
+    {
+      "code": "L08",
+      "type": "scale",
+      "text": "Müşteri hizmetleri hızlı çözüm sunar.",
+      "scale": {
+        "min": 1,
+        "max": 5,
+        "labels": {
+          "1": "Kesinlikle katılmıyorum",
+          "2": "Katılmıyorum",
+          "3": "Ne katılıyorum ne katılmıyorum",
+          "4": "Katılıyorum",
+          "5": "Kesinlikle katılıyorum"
+        }
+      },
+      "base": "all",
+      "allow_na": true
+    },
+    {
+      "code": "L09",
+      "type": "scale",
+      "text": "Ödeme adımı güven vericidir.",
+      "scale": {
+        "min": 1,
+        "max": 5,
+        "labels": {
+          "1": "Kesinlikle katılmıyorum",
+          "2": "Katılmıyorum",
+          "3": "Ne katılıyorum ne katılmıyorum",
+          "4": "Katılıyorum",
+          "5": "Kesinlikle katılıyorum"
+        }
+      },
+      "base": "all",
+      "allow_na": true
+    },
+    {
+      "code": "L10",
+      "type": "scale",
+      "text": "Fiyat/performans değerlendirmesi yaparken yorumlar önemlidir.",
+      "scale": {
+        "min": 1,
+        "max": 5,
+        "labels": {
+          "1": "Kesinlikle katılmıyorum",
+          "2": "Katılmıyorum",
+          "3": "Ne katılıyorum ne katılmıyorum",
+          "4": "Katılıyorum",
+          "5": "Kesinlikle katılıyorum"
+        }
+      },
+      "base": "all",
+      "allow_na": true
+    },
+    {
+      "code": "L11",
+      "type": "scale",
+      "text": "Satıcı puanı ve geçmişi seçimimde belirleyicidir.",
+      "scale": {
+        "min": 1,
+        "max": 5,
+        "labels": {
+          "1": "Kesinlikle katılmıyorum",
+          "2": "Katılmıyorum",
+          "3": "Ne katılıyorum ne katılmıyorum",
+          "4": "Katılıyorum",
+          "5": "Kesinlikle katılıyorum"
+        }
+      },
+      "base": "all",
+      "allow_na": true
+    },
+    {
+      "code": "L12",
+      "type": "scale",
+      "text": "Kampanyalar gerçekçi ve adildir.",
+      "scale": {
+        "min": 1,
+        "max": 5,
+        "labels": {
+          "1": "Kesinlikle katılmıyorum",
+          "2": "Katılmıyorum",
+          "3": "Ne katılıyorum ne katılmıyorum",
+          "4": "Katılıyorum",
+          "5": "Kesinlikle katılıyorum"
+        }
+      },
+      "base": "all",
+      "allow_na": true
+    },
+    {
+      "code": "L13",
+      "type": "scale",
+      "text": "Ürün teslimatında hasar yaşama riski düşüktür.",
+      "scale": {
+        "min": 1,
+        "max": 5,
+        "labels": {
+          "1": "Kesinlikle katılmıyorum",
+          "2": "Katılmıyorum",
+          "3": "Ne katılıyorum ne katılmıyorum",
+          "4": "Katılıyorum",
+          "5": "Kesinlikle katılıyorum"
+        }
+      },
+      "base": "all",
+      "allow_na": true
+    },
+    {
+      "code": "L14",
+      "type": "scale",
+      "text": "Kargo ücretleri genelde makuldür.",
+      "scale": {
+        "min": 1,
+        "max": 5,
+        "labels": {
+          "1": "Kesinlikle katılmıyorum",
+          "2": "Katılmıyorum",
+          "3": "Ne katılıyorum ne katılmıyorum",
+          "4": "Katılıyorum",
+          "5": "Kesinlikle katılıyorum"
+        }
+      },
+      "base": "all",
+      "allow_na": true
+    },
+    {
+      "code": "L15",
+      "type": "scale",
+      "text": "Müşteri yorumlarında sahte yorumlar sık görülür.",
+      "scale": {
+        "min": 1,
+        "max": 5,
+        "labels": {
+          "1": "Kesinlikle katılmıyorum",
+          "2": "Katılmıyorum",
+          "3": "Ne katılıyorum ne katılmıyorum",
+          "4": "Katılıyorum",
+          "5": "Kesinlikle katılıyorum"
+        }
+      },
+      "base": "all",
+      "allow_na": true
+    },
+    {
+      "code": "L16",
+      "type": "scale",
+      "text": "Satın aldıktan sonra pişmanlık yaşamam nadirdir.",
+      "scale": {
+        "min": 1,
+        "max": 5,
+        "labels": {
+          "1": "Kesinlikle katılmıyorum",
+          "2": "Katılmıyorum",
+          "3": "Ne katılıyorum ne katılmıyorum",
+          "4": "Katılıyorum",
+          "5": "Kesinlikle katılıyorum"
+        }
+      },
+      "base": "all",
+      "allow_na": true
+    },
+    {
+      "code": "L17",
+      "type": "scale",
+      "text": "Marka bilinirliği benim için önemlidir.",
+      "scale": {
+        "min": 1,
+        "max": 5,
+        "labels": {
+          "1": "Kesinlikle katılmıyorum",
+          "2": "Katılmıyorum",
+          "3": "Ne katılıyorum ne katılmıyorum",
+          "4": "Katılıyorum",
+          "5": "Kesinlikle katılıyorum"
+        }
+      },
+      "base": "all",
+      "allow_na": true
+    },
+    {
+      "code": "L18",
+      "type": "scale",
+      "text": "Yeni markaları denemeye açığım.",
+      "scale": {
+        "min": 1,
+        "max": 5,
+        "labels": {
+          "1": "Kesinlikle katılmıyorum",
+          "2": "Katılmıyorum",
+          "3": "Ne katılıyorum ne katılmıyorum",
+          "4": "Katılıyorum",
+          "5": "Kesinlikle katılıyorum"
+        }
+      },
+      "base": "all",
+      "allow_na": true
+    },
+    {
+      "code": "L19",
+      "type": "scale",
+      "text": "Yerel/yerli markaları tercih ederim.",
+      "scale": {
+        "min": 1,
+        "max": 5,
+        "labels": {
+          "1": "Kesinlikle katılmıyorum",
+          "2": "Katılmıyorum",
+          "3": "Ne katılıyorum ne katılmıyorum",
+          "4": "Katılıyorum",
+          "5": "Kesinlikle katılıyorum"
+        }
+      },
+      "base": "all",
+      "allow_na": true
+    },
+    {
+      "code": "L20",
+      "type": "scale",
+      "text": "Çevre dostu ambalaj benim için önemlidir.",
+      "scale": {
+        "min": 1,
+        "max": 5,
+        "labels": {
+          "1": "Kesinlikle katılmıyorum",
+          "2": "Katılmıyorum",
+          "3": "Ne katılıyorum ne katılmıyorum",
+          "4": "Katılıyorum",
+          "5": "Kesinlikle katılıyorum"
+        }
+      },
+      "base": "all",
+      "allow_na": true
+    },
+    {
+      "code": "L21",
+      "type": "scale",
+      "text": "Hızlı teslimat için ekstra ücret ödeyebilirim.",
+      "scale": {
+        "min": 1,
+        "max": 5,
+        "labels": {
+          "1": "Kesinlikle katılmıyorum",
+          "2": "Katılmıyorum",
+          "3": "Ne katılıyorum ne katılmıyorum",
+          "4": "Katılıyorum",
+          "5": "Kesinlikle katılıyorum"
+        }
+      },
+      "base": "all",
+      "allow_na": true
+    },
+    {
+      "code": "L22",
+      "type": "scale",
+      "text": "Taksit imkanı satın almamı kolaylaştırır.",
+      "scale": {
+        "min": 1,
+        "max": 5,
+        "labels": {
+          "1": "Kesinlikle katılmıyorum",
+          "2": "Katılmıyorum",
+          "3": "Ne katılıyorum ne katılmıyorum",
+          "4": "Katılıyorum",
+          "5": "Kesinlikle katılıyorum"
+        }
+      },
+      "base": "all",
+      "allow_na": true
+    },
+    {
+      "code": "L23",
+      "type": "scale",
+      "text": "Sadakat programları beni bağlı tutar.",
+      "scale": {
+        "min": 1,
+        "max": 5,
+        "labels": {
+          "1": "Kesinlikle katılmıyorum",
+          "2": "Katılmıyorum",
+          "3": "Ne katılıyorum ne katılmıyorum",
+          "4": "Katılıyorum",
+          "5": "Kesinlikle katılıyorum"
+        }
+      },
+      "base": "all",
+      "allow_na": true
+    },
+    {
+      "code": "L24",
+      "type": "scale",
+      "text": "Kişiselleştirilmiş öneriler faydalıdır.",
+      "scale": {
+        "min": 1,
+        "max": 5,
+        "labels": {
+          "1": "Kesinlikle katılmıyorum",
+          "2": "Katılmıyorum",
+          "3": "Ne katılıyorum ne katılmıyorum",
+          "4": "Katılıyorum",
+          "5": "Kesinlikle katılıyorum"
+        }
+      },
+      "base": "all",
+      "allow_na": true
+    },
+    {
+      "code": "L25",
+      "type": "scale",
+      "text": "Kişiselleştirilmiş öneriler rahatsız edici olabilir.",
+      "scale": {
+        "min": 1,
+        "max": 5,
+        "labels": {
+          "1": "Kesinlikle katılmıyorum",
+          "2": "Katılmıyorum",
+          "3": "Ne katılıyorum ne katılmıyorum",
+          "4": "Katılıyorum",
+          "5": "Kesinlikle katılıyorum"
+        }
+      },
+      "base": "all",
+      "allow_na": true
+    },
+    {
+      "code": "S11_MEMNUNIYET",
+      "type": "single",
+      "text": "Genel olarak son 3 ayki online alışveriş deneyiminiz nasıldı?",
+      "options": {
+        "1": "Çok kötü",
+        "2": "Kötü",
+        "3": "Orta",
+        "4": "İyi",
+        "5": "Çok iyi"
+      },
+      "base": "all",
+      "allow_na": true
+    },
+    {
+      "code": "S12_SIKLIK",
+      "type": "single",
+      "text": "Online alışveriş sıklığınız?",
+      "options": {
+        "1": "Haftada birkaç",
+        "2": "Haftada 1",
+        "3": "Ayda 2-3",
+        "4": "Ayda 1",
+        "5": "Daha seyrek"
+      },
+      "base": "all",
+      "allow_na": true
+    },
+    {
+      "code": "S13_SEPET",
+      "type": "single",
+      "text": "Ortalama sepet tutarınız?",
+      "options": {
+        "1": "0-500 TL",
+        "2": "501-1.000 TL",
+        "3": "1.001-2.000 TL",
+        "4": "2.001-5.000 TL",
+        "5": "5.001 TL+"
+      },
+      "base": "all",
+      "allow_na": true
+    },
+    {
+      "code": "S14_TESLIM_SORUN",
+      "type": "single",
+      "text": "Son 3 ayda teslimat sorunu yaşadınız mı?",
+      "options": {
+        "1": "Evet",
+        "2": "Hayır"
+      },
+      "base": "all",
+      "allow_na": true
+    },
+    {
+      "code": "S15_URUN_SORUN",
+      "type": "single",
+      "text": "Son 3 ayda ürün kusuru/arıza yaşadınız mı?",
+      "options": {
+        "1": "Evet",
+        "2": "Hayır"
+      },
+      "base": "all",
+      "allow_na": true
+    },
+    {
+      "code": "S16_IADE_YAPTI",
+      "type": "single",
+      "text": "Son 3 ayda iade yaptınız mı?",
+      "options": {
+        "1": "Evet",
+        "2": "Hayır"
+      },
+      "base": "all",
+      "allow_na": true
+    },
+    {
+      "code": "S17_IADE_NEDEN",
+      "type": "single",
+      "text": "İade yaptıysanız ana neden neydi?",
+      "options": {
+        "1": "Beklenti karşılamadı",
+        "2": "Kusurlu/bozuk",
+        "3": "Yanlış ürün",
+        "4": "Geç teslimat",
+        "5": "Fiyat daha sonra düştü",
+        "6": "Diğer"
+      },
+      "base": "if_S16_IADE_YAPTI==1",
+      "allow_na": true
+    },
+    {
+      "code": "S18_SATICI_TERCIH",
+      "type": "single",
+      "text": "Pazar yerinde satıcı seçerken en önemli kriter?",
+      "options": {
+        "1": "En düşük fiyat",
+        "2": "En yüksek puan",
+        "3": "Hızlı kargo",
+        "4": "Resmi satıcı",
+        "5": "İade kolaylığı"
+      },
+      "base": "all",
+      "allow_na": true
+    },
+    {
+      "code": "S19_YORUM_OKUMA",
+      "type": "single",
+      "text": "Bir ürün almadan önce yorum okuma düzeyiniz?",
+      "options": {
+        "1": "Hiç okumam",
+        "2": "Nadiren",
+        "3": "Bazen",
+        "4": "Sık",
+        "5": "Her zaman"
+      },
+      "base": "all",
+      "allow_na": true
+    },
+    {
+      "code": "S20_YORUM_YAZMA",
+      "type": "single",
+      "text": "Satın aldıktan sonra yorum yazma sıklığınız?",
+      "options": {
+        "1": "Hiç",
+        "2": "Nadiren",
+        "3": "Bazen",
+        "4": "Sık",
+        "5": "Her zaman"
+      },
+      "base": "all",
+      "allow_na": true
+    },
+    {
+      "code": "S21_URUN_KARSILASTIR",
+      "type": "single",
+      "text": "Ürünleri karşılaştırma yapar mısınız?",
+      "options": {
+        "1": "Hayır",
+        "2": "Evet, bazen",
+        "3": "Evet, sık"
+      },
+      "base": "all",
+      "allow_na": true
+    },
+    {
+      "code": "S22_MARKA_MI_FIYAT",
+      "type": "single",
+      "text": "Kararınızda hangisi daha baskın?",
+      "options": {
+        "1": "Fiyat",
+        "2": "Marka",
+        "3": "Eşit"
+      },
+      "base": "all",
+      "allow_na": true
+    },
+    {
+      "code": "S23_KARGO_TERC",
+      "type": "single",
+      "text": "Kargo firması tercihiniz var mı?",
+      "options": {
+        "1": "Evet",
+        "2": "Hayır"
+      },
+      "base": "all",
+      "allow_na": true
+    },
+    {
+      "code": "S24_TAKIP",
+      "type": "single",
+      "text": "Sipariş takibini ne sıklıkla kontrol edersiniz?",
+      "options": {
+        "1": "Hiç",
+        "2": "1 kez",
+        "3": "2-3 kez",
+        "4": "Günde 1",
+        "5": "Günde birkaç"
+      },
+      "base": "all",
+      "allow_na": true
+    },
+    {
+      "code": "S25_BILDIRIM",
+      "type": "single",
+      "text": "Sipariş bildirimlerini nasıl almak istersiniz?",
+      "options": {
+        "1": "SMS",
+        "2": "E-posta",
+        "3": "Uygulama bildirimi",
+        "4": "WhatsApp",
+        "5": "İstemem"
+      },
+      "base": "all",
+      "allow_na": true
+    },
+    {
+      "code": "S26_GUVENLIK_ENDISE",
+      "type": "single",
+      "text": "Online alışverişte güvenlik endişeniz?",
+      "options": {
+        "1": "Yok",
+        "2": "Düşük",
+        "3": "Orta",
+        "4": "Yüksek",
+        "5": "Çok yüksek"
+      },
+      "base": "all",
+      "allow_na": true
+    },
+    {
+      "code": "S27_SAHIPLIK",
+      "type": "single",
+      "text": "Kullanmayı tercih ettiğiniz ana cihaz?",
+      "options": {
+        "1": "iOS telefon",
+        "2": "Android telefon",
+        "3": "Windows PC",
+        "4": "Mac",
+        "5": "Tablet"
+      },
+      "base": "all",
+      "allow_na": true
+    },
+    {
+      "code": "S28_LOJISTIK_ONEM",
+      "type": "single",
+      "text": "Teslimat süreleri sizin için?",
+      "options": {
+        "1": "Önemsiz",
+        "2": "Az önemli",
+        "3": "Orta",
+        "4": "Önemli",
+        "5": "Çok önemli"
+      },
+      "base": "all",
+      "allow_na": true
+    },
+    {
+      "code": "S29_ODENEN_KARGO",
+      "type": "single",
+      "text": "Kargo ücreti görürseniz?",
+      "options": {
+        "1": "Satın almaktan vazgeçerim",
+        "2": "Alternatif ararım",
+        "3": "Bazen öderim",
+        "4": "Genelde öderim",
+        "5": "Farketmez"
+      },
+      "base": "all",
+      "allow_na": true
+    },
+    {
+      "code": "S30_REKLAM_ETKI",
+      "type": "single",
+      "text": "Reklamlar kararınızı ne kadar etkiler?",
+      "options": {
+        "1": "Hiç",
+        "2": "Az",
+        "3": "Orta",
+        "4": "Çok",
+        "5": "Aşırı"
+      },
+      "base": "all",
+      "allow_na": true
+    },
+    {
+      "code": "S31_ARA_YUZ",
+      "type": "single",
+      "text": "Kullandığınız uygulama/site arayüzü genel olarak?",
+      "options": {
+        "1": "Çok zor",
+        "2": "Zor",
+        "3": "Orta",
+        "4": "Kolay",
+        "5": "Çok kolay"
+      },
+      "base": "all",
+      "allow_na": true
+    },
+    {
+      "code": "S32_ARIZA_COZUM",
+      "type": "single",
+      "text": "Sorun yaşadığınızda çözüm hızı genelde?",
+      "options": {
+        "1": "Çok yavaş",
+        "2": "Yavaş",
+        "3": "Orta",
+        "4": "Hızlı",
+        "5": "Çok hızlı"
+      },
+      "base": "all",
+      "allow_na": true
+    },
+    {
+      "code": "S33_GERI_ODEME",
+      "type": "single",
+      "text": "İade/geri ödeme süresi memnuniyetiniz?",
+      "options": {
+        "1": "Çok düşük",
+        "2": "Düşük",
+        "3": "Orta",
+        "4": "Yüksek",
+        "5": "Çok yüksek"
+      },
+      "base": "if_S16_IADE_YAPTI==1",
+      "allow_na": true
+    },
+    {
+      "code": "S34_UYGULAMA_TERC",
+      "type": "single",
+      "text": "Alışverişi genelde nereden yaparsınız?",
+      "options": {
+        "1": "Mobil uygulama",
+        "2": "Mobil web",
+        "3": "Masaüstü web"
+      },
+      "base": "all",
+      "allow_na": true
+    },
+    {
+      "code": "S35_YENI_SATICI",
+      "type": "single",
+      "text": "Yeni bir satıcıdan alışveriş yapma isteğiniz?",
+      "options": {
+        "1": "Hiç",
+        "2": "Düşük",
+        "3": "Orta",
+        "4": "Yüksek",
+        "5": "Çok yüksek"
+      },
+      "base": "all",
+      "allow_na": true
+    },
+    {
+      "code": "S36_DOGRULANMIS",
+      "type": "single",
+      "text": "Doğrulanmış satıcı etiketi sizin için?",
+      "options": {
+        "1": "Önemsiz",
+        "2": "Az önemli",
+        "3": "Orta",
+        "4": "Önemli",
+        "5": "Çok önemli"
+      },
+      "base": "all",
+      "allow_na": true
+    },
+    {
+      "code": "S37_YORUM_DOGRULUK",
+      "type": "single",
+      "text": "Yorumların doğruluğuna güven düzeyiniz?",
+      "options": {
+        "1": "Hiç güvenmem",
+        "2": "Az",
+        "3": "Orta",
+        "4": "Güvenirim",
+        "5": "Çok güvenirim"
+      },
+      "base": "all",
+      "allow_na": true
+    },
+    {
+      "code": "S38_FIYAT_TAKIP",
+      "type": "single",
+      "text": "Fiyat takibi yapar mısınız?",
+      "options": {
+        "1": "Hayır",
+        "2": "Evet, bazen",
+        "3": "Evet, sık"
+      },
+      "base": "all",
+      "allow_na": true
+    },
+    {
+      "code": "S39_KARGO_ESIK",
+      "type": "single",
+      "text": "Ücretsiz kargo eşiği olunca davranışınız?",
+      "options": {
+        "1": "Etki etmez",
+        "2": "Biraz artırır",
+        "3": "Belirgin artırır"
+      },
+      "base": "all",
+      "allow_na": true
+    },
+    {
+      "code": "S40_TAVSIYE_GRUP",
+      "type": "single",
+      "text": "Bir arkadaşınıza kullandığınız pazar yerini tavsiye etme grubunuz?",
+      "options": {
+        "1": "0-5 düşük",
+        "2": "6-8 orta",
+        "3": "9-10 yüksek"
+      },
+      "base": "all",
+      "allow_na": true
+    },
+    {
+      "code": "N01_NPS",
+      "type": "numeric",
+      "text": "Kullandığınız ana pazar yerini 0-10 arası tavsiye etme olasılığınız nedir?",
+      "range": {
+        "min": 0,
+        "max": 10
+      },
+      "unit": null,
+      "base": "all",
+      "allow_na": true
+    },
+    {
+      "code": "R01_FIYAT",
+      "type": "numeric",
+      "text": "Fiyatlardan memnuniyetinizi 1-10 arası puanlayın.",
+      "range": {
+        "min": 1,
+        "max": 10
+      },
+      "unit": null,
+      "base": "all",
+      "allow_na": true
+    },
+    {
+      "code": "R02_KALITE",
+      "type": "numeric",
+      "text": "Ürün kalitesinden memnuniyetinizi 1-10 arası puanlayın.",
+      "range": {
+        "min": 1,
+        "max": 10
+      },
+      "unit": null,
+      "base": "all",
+      "allow_na": true
+    },
+    {
+      "code": "R03_KARGO",
+      "type": "numeric",
+      "text": "Kargo/teslimat deneyiminizi 1-10 arası puanlayın.",
+      "range": {
+        "min": 1,
+        "max": 10
+      },
+      "unit": null,
+      "base": "all",
+      "allow_na": true
+    },
+    {
+      "code": "R04_IADE",
+      "type": "numeric",
+      "text": "İade sürecini 1-10 arası puanlayın.",
+      "range": {
+        "min": 1,
+        "max": 10
+      },
+      "unit": null,
+      "base": "if_S16_IADE_YAPTI==1",
+      "allow_na": true
+    },
+    {
+      "code": "R05_UI",
+      "type": "numeric",
+      "text": "Uygulama/site kullanım kolaylığını 1-10 arası puanlayın.",
+      "range": {
+        "min": 1,
+        "max": 10
+      },
+      "unit": null,
+      "base": "all",
+      "allow_na": true
+    },
+    {
+      "code": "R06_GUVEN",
+      "type": "numeric",
+      "text": "Güvenlik algınızı 1-10 arası puanlayın.",
+      "range": {
+        "min": 1,
+        "max": 10
+      },
+      "unit": null,
+      "base": "all",
+      "allow_na": true
+    },
+    {
+      "code": "R07_YORUM",
+      "type": "numeric",
+      "text": "Yorumların faydasını 1-10 arası puanlayın.",
+      "range": {
+        "min": 1,
+        "max": 10
+      },
+      "unit": null,
+      "base": "all",
+      "allow_na": true
+    },
+    {
+      "code": "R08_KAMPANYA",
+      "type": "numeric",
+      "text": "Kampanyaların faydasını 1-10 arası puanlayın.",
+      "range": {
+        "min": 1,
+        "max": 10
+      },
+      "unit": null,
+      "base": "all",
+      "allow_na": true
+    },
+    {
+      "code": "R09_MH",
+      "type": "numeric",
+      "text": "Müşteri hizmetlerini 1-10 arası puanlayın.",
+      "range": {
+        "min": 1,
+        "max": 10
+      },
+      "unit": null,
+      "base": "all",
+      "allow_na": true
+    },
+    {
+      "code": "T01_EN_IYI",
+      "type": "text",
+      "text": "Kullandığınız platformda en beğendiğiniz şey nedir? Kısaca yazın.",
+      "max_len": 200,
+      "base": "all",
+      "allow_na": true
+    },
+    {
+      "code": "T02_EN_KOTU",
+      "type": "text",
+      "text": "Kullandığınız platformda en çok zorlandığınız/şikayet ettiğiniz nokta nedir?",
+      "max_len": 200,
+      "base": "all",
+      "allow_na": true
+    },
+    {
+      "code": "T03_IYILESTIR",
+      "type": "text",
+      "text": "Platformda tek bir şeyi değiştirebilseydiniz bu ne olurdu?",
+      "max_len": 200,
+      "base": "all",
+      "allow_na": true
+    },
+    {
+      "code": "T04_SAHTE",
+      "type": "text",
+      "text": "Sahte yorumları ayırt etmek için nelere bakarsınız?",
+      "max_len": 200,
+      "base": "all",
+      "allow_na": true
+    },
+    {
+      "code": "T05_EK",
+      "type": "text",
+      "text": "Eklemek istediğiniz başka bir görüş var mı?",
+      "max_len": 200,
+      "base": "all",
+      "allow_na": true
+    }
+  ]
+}

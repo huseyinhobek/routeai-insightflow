@@ -135,7 +135,7 @@ const LoginPage: React.FC = () => {
           <div className="inline-flex items-center justify-center p-4 bg-white/10 backdrop-blur-sm rounded-2xl mb-6">
             <BarChart2 className="w-10 h-10 text-white" />
           </div>
-          <h1 className="text-3xl font-bold text-white mb-2">Native Insight Studio</h1>
+          <h1 className="text-3xl font-bold text-white mb-2">Aletheia</h1>
           <p className="text-blue-200">
             {step === 'credentials' ? 'Sign in to your account' : 'Enter the code sent to your email'}
           </p>

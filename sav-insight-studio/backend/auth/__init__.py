@@ -1,5 +1,5 @@
 """
-Authentication and Authorization module for SAV Insight Studio
+Authentication and Authorization module for Aletheia
 """
 
 from .jwt_handler import create_access_token, verify_token, decode_token

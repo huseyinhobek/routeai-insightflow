@@ -1,5 +1,5 @@
 """
-SAV Insight Studio API
+Aletheia API
 Comprehensive SPSS (.sav) file analysis platform with PostgreSQL storage
 """
 from fastapi import FastAPI, UploadFile, File, HTTPException, Depends, BackgroundTasks, Request
@@ -48,7 +48,7 @@ logger = logging.getLogger(__name__)
 
 # Create FastAPI app
 app = FastAPI(
-    title="SAV Insight Studio API",
+    title="Aletheia API",
     description="Comprehensive SPSS data analysis platform",
     version="2.0.0"
 )

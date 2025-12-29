@@ -191,7 +191,7 @@ const UploadPage: React.FC = () => {
             <BarChart2 className="w-8 h-8 text-white" />
           </div>
           <h1 className="text-4xl font-extrabold text-gray-900 mb-3 tracking-tight">
-            SAV Insight Studio
+            Aletheia
           </h1>
           <p className="text-lg text-gray-500 max-w-xl mx-auto">
             Analyze your survey datasets (SPSS, Excel, CSV), measure data quality, and evaluate digital twin readiness.
@@ -381,7 +381,7 @@ const UploadPage: React.FC = () => {
             </div>
             <h3 className="font-bold text-gray-900 mb-2">AI-Powered Filters</h3>
             <p className="text-sm text-gray-500">
-              Smart segmentation and filter suggestions powered by Native AI
+              Smart segmentation and filter suggestions powered by Aletheia
             </p>
           </div>
         </div>

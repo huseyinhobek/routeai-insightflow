@@ -1,5 +1,5 @@
 """
-Middleware components for SAV Insight Studio
+Middleware components for Aletheia
 """
 
 from .org_scope import OrgScopeMiddleware

@@ -53,7 +53,7 @@ class Settings(BaseSettings):
     SMTP_PORT: int = 587
     SMTP_USER: str = ""
     SMTP_PASSWORD: str = ""
-    EMAIL_FROM: str = "SAV Insight <noreply@example.com>"
+    EMAIL_FROM: str = "Aletheia <noreply@example.com>"
     EMAIL_ENABLED: bool = False
     
     # Magic Link Configuration

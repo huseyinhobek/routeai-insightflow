@@ -47,7 +47,7 @@ class ExportService:
         ws.title = "Executive Summary"
         
         # Title
-        ws['A1'] = "SAV INSIGHT STUDIO - ANKET ÖZETİ"
+        ws['A1'] = "ALETHEIA - ANKET ÖZETİ"
         ws['A1'].font = Font(bold=True, size=18, color="2563EB")
         ws.merge_cells('A1:E1')
         

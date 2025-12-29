@@ -1,6 +1,6 @@
 <div align="center">
 
-# 🚀 RouteAI InsightFlow
+# 🚀 Aletheia
 
 <div align="center">
 
@@ -27,7 +27,7 @@
 
 ## 🌟 Overview
 
-**RouteAI InsightFlow** is a next-generation survey data analysis platform that combines the power of AI, natural language processing, and advanced data science to transform raw survey responses into meaningful, actionable insights. Built for researchers, analysts, and decision-makers who need to extract maximum value from their survey data.
+**Aletheia** is a next-generation survey data analysis platform that combines the power of AI, natural language processing, and advanced data science to transform raw survey responses into meaningful, actionable insights. Built for researchers, analysts, and decision-makers who need to extract maximum value from their survey data.
 
 ### 🎯 What Makes It Special?
 
@@ -540,7 +540,7 @@ For issues, questions, or feature requests:
 
 <div align="center">
 
-**Made with ❤️ by the RouteAI Team**
+**Made with ❤️ by the Aletheia Team**
 
 [⭐ Star us on GitHub](https://github.com/huseyinhobek/routeai-insightflow) • [📖 Documentation](#-documentation) • [🐛 Report Bug](https://github.com/huseyinhobek/routeai-insightflow/issues)
 

@@ -50,8 +50,9 @@ const App: React.FC = () => {
               <Route path="/exports" element={<Exports />} />
               <Route path="/audiences" element={<AudiencesPage />} />
               <Route path="/threads" element={<ThreadsPage />} />
-              <Route path="/threads/:threadId" element={<ThreadChatPage />} />
             </Route>
+            {/* ThreadChatPage - Full screen, no Layout padding */}
+            <Route path="/threads/:threadId" element={<ThreadChatPage />} />
             
             {/* Admin routes - require admin role */}
             <Route element={<ProtectedRoute requiredRoles={['super_admin', 'org_admin']} />}>
